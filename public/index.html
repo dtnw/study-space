@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Derby's Study Space</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <!-- ── APP SHELL ────────────────────────────────────────── -->
+  <div id="app">
+
+    <!-- Header bar -->
+    <header id="header">
+      <div id="header-left">
+        <span id="logo">🌸 Derby's Study Space</span>
+        <span id="player-count">👤 0</span>
+      </div>
+      <div id="timer-bar">
+        <span id="timer-mode-label">TIMER</span>
+        <span id="timer-countdown">00:00</span>
+        <span id="pomo-tomato" class="hidden">🍅</span>
+        <span id="pomo-counter" class="hidden"></span>
+        <button id="pause-pomo-btn"  class="pixel-btn small pause-btn">⏸</button>
+        <button id="resume-pomo-btn" class="pixel-btn small resume-btn hidden">▶</button>
+        <button id="skip-timer-btn"  class="pixel-btn small skip-btn" title="Skip">⏭</button>
+        <button id="stop-timer-btn"  class="pixel-btn small danger">■</button>
+      </div>
+      <div id="header-right">
+        <span id="coin-count" class="coin-count">🪙 0</span>
+        <div class="status-block">
+          <span id="status-indicator" class="status-idle">● IDLE</span>
+          <div class="audio-btns">
+            <button id="mic-btn"    class="pixel-btn small icon-btn" title="Mute yourself">🎤</button>
+            <button id="listen-btn" class="pixel-btn small icon-btn" title="Deafen">🔊</button>
+          </div>
+        </div>
+        <span id="player-name-display">—</span>
+      </div>
+    </header>
+
+    <!-- Main layout: [task panel] [canvas] [social panel] -->
+    <div id="main-layout">
+
+      <!-- Task Panel — LEFT -->
+      <aside id="task-panel" class="task-panel">
+
+        <!-- ── My Tasks ── -->
+        <div class="task-section">
+          <div class="panel-header">
+            <span>📋 MY TASKS</span>
+            <button id="add-task-btn" class="pixel-btn small">+</button>
+          </div>
+          <ul id="personal-task-list" class="task-list"></ul>
+          <div class="panel-empty" id="personal-empty">No tasks yet.<br/>Add one!</div>
+        </div>
+
+        <div class="panel-divider"></div>
+
+        <!-- ── Shared Tasks ── -->
+        <div class="task-section">
+          <div class="panel-header">
+            <span>🌍 SHARED TASKS</span>
+          </div>
+          <ul id="global-task-list" class="task-list"></ul>
+          <div class="panel-empty" id="global-empty">No tasks yet.</div>
+        </div>
+
+      </aside>
+
+      <!-- Game canvas — MIDDLE -->
+      <div id="game-wrap">
+        <div id="game-container"></div>
+        <div id="interaction-prompt" class="hidden">[E] Sit Down</div>
+        <div id="stand-prompt" class="hidden">[E] Stand Up</div>
+        <div id="cook-prompt" class="hidden">[E] Start Cooking</div>
+        <div id="coffee-prompt" class="hidden">[E] Grab Coffee</div>
+        <div id="laundry-prompt" class="hidden">[E] Start Laundry</div>
+        <div id="workout-prompt" class="hidden">[E] Work Out</div>
+        <div id="washup-prompt" class="hidden">[E] Wash Up</div>
+        <div id="chat-prompt" class="hidden"></div>
+        <div id="chat-input-wrap" class="hidden">
+          <input type="text" id="chat-text-input" class="pixel-input chat-input"
+                 placeholder="Say something… (Enter to send, Esc to cancel)" maxlength="80" autocomplete="off" />
+        </div>
+      </div>
+
+      <!-- Social Panel — RIGHT -->
+      <aside id="social-panel">
+        <div class="panel-header">
+          <span>👥 SOCIAL</span>
+          <button id="social-toggle-btn" class="pixel-btn small">▾</button>
+        </div>
+        <div id="social-body">
+          <div class="social-prefs">
+            <span class="social-prefs-label">YOUR STATUS</span>
+            <div class="pref-pills">
+              <button class="pref-pill active" data-pref="sociable">😊 Sociable</button>
+              <button class="pref-pill" data-pref="private">🔒 Private</button>
+              <button class="pref-pill" data-pref="lockedin">⛔ Locked In</button>
+            </div>
+          </div>
+          <div class="social-divider"></div>
+          <div id="friend-requests" class="hidden">
+            <div class="social-sub-header">REQUESTS</div>
+            <ul id="friend-request-list"></ul>
+            <div class="social-divider"></div>
+          </div>
+          <div class="social-sub-header">
+            IN THE SPACE <span id="members-online-count" class="online-count"></span>
+          </div>
+          <ul id="members-list">
+            <li class="members-empty">Just you here!<br/>Invite someone to study 🌸</li>
+          </ul>
+        </div>
+        <!-- Friend chat drawer -->
+        <div id="friend-chat-section" class="hidden">
+          <div class="friend-chat-header">
+            <span id="friend-chat-name">Chat</span>
+            <button id="friend-chat-close" class="pc-close" style="position:static;color:#888">✕</button>
+          </div>
+          <div id="friend-chat-messages"></div>
+          <input type="text" id="friend-chat-input" class="pixel-input friend-chat-input-field"
+                 placeholder="Type a message…" maxlength="80" autocomplete="off" />
+        </div>
+      </aside>
+
+    </div>
+
+    <!-- ── DIY Furniture Bar ───────────────────────────────── -->
+    <footer id="diy-bar">
+
+      <!-- Always visible: toggle row -->
+      <div id="diy-toprow">
+        <button id="diy-creator-toggle" class="pixel-btn small">🔧 DIY CREATOR</button>
+      </div>
+
+      <!-- Expanded creator panel -->
+      <div id="diy-panel" class="hidden">
+
+        <!-- Section tabs -->
+        <div id="diy-tabs">
+          <button class="diy-tab active" data-tab="furniture">🪑 Furniture</button>
+          <button class="diy-tab" data-tab="decoration">🌿 Decor</button>
+          <button class="diy-tab" data-tab="kitchen">🍳 Kitchen</button>
+          <button id="diy-exit-creator" class="pixel-btn small danger">✕ Exit</button>
+        </div>
+
+        <!-- Furniture items -->
+        <div id="diy-tab-furniture" class="diy-tab-content">
+          <button class="diy-item-btn" data-type="chair">
+            <div class="diy-thumb diy-thumb-chair"></div>
+            <span>Chair</span>
+          </button>
+          <button class="diy-item-btn" data-type="bean-bag">
+            <div class="diy-thumb diy-thumb-bean-bag"></div>
+            <span>Bean Bag</span>
+          </button>
+          <button class="diy-item-btn" data-type="desk-solo">
+            <div class="diy-thumb diy-thumb-desk-solo"></div>
+            <span>Solo Desk</span>
+          </button>
+          <button class="diy-item-btn" data-type="desk-two">
+            <div class="diy-thumb diy-thumb-desk-two"></div>
+            <span>2P Table</span>
+          </button>
+          <button class="diy-item-btn" data-type="desk-four">
+            <div class="diy-thumb diy-thumb-desk-four"></div>
+            <span>4P Table</span>
+          </button>
+        </div>
+
+        <!-- Decoration items -->
+        <div id="diy-tab-decoration" class="diy-tab-content hidden">
+          <button class="diy-item-btn" data-type="plant">
+            <div class="diy-thumb diy-thumb-plant"></div>
+            <span>Plant</span>
+          </button>
+          <button class="diy-item-btn" data-type="shelf">
+            <div class="diy-thumb diy-thumb-shelf"></div>
+            <span>Shelf</span>
+          </button>
+        </div>
+
+        <!-- Kitchen items -->
+        <div id="diy-tab-kitchen" class="diy-tab-content hidden">
+          <button class="diy-item-btn" data-type="kitchen-table">
+            <div class="diy-thumb diy-thumb-kitchen-table"></div>
+            <span>Dining Table</span>
+          </button>
+          <button class="diy-item-btn" data-type="kitchen-bench">
+            <div class="diy-thumb diy-thumb-kitchen-bench"></div>
+            <span>Bench</span>
+          </button>
+          <button class="diy-item-btn" data-type="stove">
+            <div class="diy-thumb diy-thumb-stove"></div>
+            <span>Stove</span>
+          </button>
+          <button class="diy-item-btn" data-type="fridge">
+            <div class="diy-thumb diy-thumb-fridge"></div>
+            <span>Fridge</span>
+          </button>
+          <button class="diy-item-btn" data-type="coffee-machine">
+            <div class="diy-thumb diy-thumb-coffee-machine"></div>
+            <span>Coffee</span>
+          </button>
+        </div>
+
+        <!-- Controls row (switches between idle hint / place controls / select controls) -->
+        <div id="diy-controls-row">
+          <span id="diy-idle-hint" class="diy-hint">Hover a placed item to highlight · Click to select</span>
+
+          <div id="diy-place-controls" class="hidden">
+            <span id="diy-placing-label" class="diy-placing-lbl">Placing: —</span>
+            <button class="pixel-btn small" id="diy-rotate-btn">↻ ROTATE <span class="diy-key">[R]</span></button>
+            <button class="pixel-btn small danger" id="diy-cancel-btn">✕ CANCEL <span class="diy-key">[ESC]</span></button>
+            <span class="diy-hint">Left-click to place · Right-click to cancel</span>
+          </div>
+
+          <div id="diy-select-controls" class="hidden">
+            <span id="diy-selected-label" class="diy-placing-lbl">— selected</span>
+            <button class="pixel-btn small" id="diy-rot-left-btn">↺ Left</button>
+            <button class="pixel-btn small" id="diy-rot-right-btn">↻ Right</button>
+            <button class="pixel-btn small danger" id="diy-delete-btn">🗑 Delete</button>
+            <button class="pixel-btn small" id="diy-deselect-btn">✕ Done</button>
+          </div>
+        </div>
+
+      </div>
+    </footer>
+  </div>
+
+  <!-- ── MODALS ─────────────────────────────────────────── -->
+
+  <!-- Name entry (shown on first load) -->
+  <div id="name-modal" class="modal-overlay active">
+    <div class="modal-box">
+      <h2>WELCOME!</h2>
+      <p>Enter your name to join the study space.</p>
+      <input type="text" id="name-input" class="pixel-input" placeholder="Your name…" maxlength="16" autocomplete="off" />
+      <p id="name-error" class="name-error"></p>
+      <div class="gender-select">
+        <button id="gender-boy-btn"  class="pixel-btn gender-btn active" data-gender="male">BOY</button>
+        <button id="gender-girl-btn" class="pixel-btn gender-btn"        data-gender="female">GIRL</button>
+      </div>
+      <div class="shirt-colors">
+        <span class="shirt-swatch active" data-color="blue"   style="background:#7890D0"></span>
+        <span class="shirt-swatch"        data-color="red"    style="background:#D06080"></span>
+        <span class="shirt-swatch"        data-color="green"  style="background:#52944A"></span>
+        <span class="shirt-swatch"        data-color="purple" style="background:#9B6BDB"></span>
+      </div>
+      <button id="join-btn" class="pixel-btn">▶ JOIN</button>
+    </div>
+  </div>
+
+  <!-- Pomodoro setup (shown when sitting at desk) -->
+  <div id="pomodoro-modal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <div class="modal-title-row">
+        <h2>YOU SAT DOWN!</h2>
+        <button id="close-pomo-modal-btn" class="modal-close-btn danger-outline">✕</button>
+      </div>
+      <p>Ready to focus? Set your timer.</p>
+      <div class="timer-fields">
+        <label>Focus (min)
+          <input type="number" id="focus-input" class="pixel-input small" value="25" min="1" max="120" />
+        </label>
+        <label>Break (min)
+          <input type="number" id="break-input" class="pixel-input small" value="5" min="1" max="60" />
+        </label>
+      </div>
+      <div class="auto-next-row">
+        <input type="checkbox" id="auto-next-cb" />
+        <label for="auto-next-cb">AUTO-NEXT</label>
+        <input type="number" id="pomo-target-input" class="rounds-input" min="1" max="99" value="1" />
+        <span class="rounds-label">ROUNDS</span>
+      </div>
+      <div class="modal-actions">
+        <button id="skip-pomo-btn"  class="pixel-btn grey-btn">JUST SIT</button>
+        <button id="start-pomo-btn" class="pixel-btn" style="color:white">▶ START</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Add task -->
+  <div id="add-task-modal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <h2>ADD TASK</h2>
+      <input type="text" id="task-input" class="pixel-input" placeholder="What are you working on?" maxlength="80" autocomplete="off" />
+      <div class="modal-actions">
+        <button id="confirm-task-btn" class="pixel-btn">✓ ADD</button>
+        <button id="cancel-task-btn"  class="pixel-btn danger">✕ CANCEL</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stop confirm modal -->
+  <div id="stop-confirm-modal" class="modal-overlay hidden">
+    <div class="modal-box small-modal">
+      <h2>STOP FOCUS?</h2>
+      <p id="stop-confirm-msg">Are you sure? You cannot resume this session.</p>
+      <div class="modal-actions">
+        <button id="stop-confirm-yes-btn" class="pixel-btn danger">YES, STOP</button>
+        <button id="stop-confirm-no-btn"  class="pixel-btn secondary">KEEP GOING</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Timer zero modal -->
+  <div id="timer-zero-modal" class="modal-overlay hidden">
+    <div class="modal-box small-modal">
+      <h2>INVALID TIMER</h2>
+      <p>Focus time cannot be 0. Please set at least 1 minute.</p>
+      <div class="modal-actions">
+        <button id="timer-zero-ok-btn" class="pixel-btn">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Task done modal -->
+  <div id="task-done-modal" class="modal-overlay hidden">
+    <div class="modal-box small-modal">
+      <h2>TASK COMPLETE!</h2>
+      <p>You did it, I'm proud of you! 🎉</p>
+      <p id="task-done-coins" class="coins-earned"></p>
+      <div class="modal-actions">
+        <button id="task-done-ok-btn" class="pixel-btn">THANKS!</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pomo finish modal (replaces side toasts) -->
+  <div id="pomo-finish-modal" class="modal-overlay hidden">
+    <div class="modal-box small-modal">
+      <h2 id="pomo-finish-title">FOCUS DONE!</h2>
+      <p id="pomo-finish-msg">Well done! Take a break.</p>
+      <p id="pomo-finish-coins" class="coins-earned"></p>
+      <div class="modal-actions">
+        <button id="pomo-finish-ok-btn" class="pixel-btn">OK!</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Eat timer modal -->
+  <div id="eat-modal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <h2>YOU SAT DOWN TO EAT!</h2>
+      <p>Set a meal timer?</p>
+      <div class="timer-fields">
+        <label>Duration (min)
+          <input type="number" id="eat-minutes" class="pixel-input small" value="20" min="1" max="120" />
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button id="eat-just-sit-btn" class="pixel-btn grey-btn">JUST SIT</button>
+        <button id="eat-start-btn"    class="pixel-btn" style="color:white">▶ START</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cook timer modal -->
+  <div id="cook-modal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <h2>TIME TO COOK!</h2>
+      <p>Set a cooking timer?</p>
+      <div class="timer-fields">
+        <label>Duration (min)
+          <input type="number" id="cook-minutes" class="pixel-input small" value="15" min="1" max="120" />
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button id="cook-just-cook-btn" class="pixel-btn grey-btn">JUST COOK</button>
+        <button id="cook-start-btn"     class="pixel-btn" style="color:white">▶ START</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Relax timer modal (bean bag) -->
+  <div id="relax-modal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <h2>TIME TO CHILL!</h2>
+      <p>Set a relaxation timer?</p>
+      <div class="timer-fields">
+        <label>Duration (min)
+          <input type="number" id="relax-minutes" class="pixel-input small" value="15" min="1" max="120" />
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button id="relax-just-chill-btn" class="pixel-btn grey-btn">JUST CHILL</button>
+        <button id="relax-start-btn"      class="pixel-btn" style="color:white">▶ START</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Laundry timer modal -->
+  <div id="laundry-modal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <h2>LAUNDRY TIME!</h2>
+      <p>Set a laundry timer?</p>
+      <div class="timer-fields">
+        <label>Duration (min)
+          <input type="number" id="laundry-minutes" class="pixel-input small" value="45" min="1" max="120" />
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button id="laundry-just-wash-btn" class="pixel-btn grey-btn">JUST WASH</button>
+        <button id="laundry-start-btn"     class="pixel-btn" style="color:white">▶ START</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Workout modal -->
+  <div id="workout-modal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <div class="modal-title">🏋️ WORKOUT</div>
+      <div class="timer-fields">
+        <label>Duration (min)
+          <input type="number" id="workout-duration" value="30" min="1" max="120" class="pixel-input small" />
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button id="workout-skip-btn"  class="pixel-btn grey-btn">SKIP TIMER</button>
+        <button id="workout-start-btn" class="pixel-btn" style="color:white">▶ START</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Wash-up modal -->
+  <div id="wash-modal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <div class="modal-title">🚿 WASH UP</div>
+      <div class="timer-fields">
+        <label>Duration (min)
+          <input type="number" id="wash-duration" value="10" min="1" max="60" class="pixel-input small" />
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button id="wash-skip-btn"  class="pixel-btn grey-btn">SKIP</button>
+        <button id="wash-start-btn" class="pixel-btn" style="color:white">▶ START</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── SCRIPTS ─────────────────────────────────────────── -->
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+  <script src="js/SoundManager.js"></script>
+  <script src="js/PlayerClass.js"></script>
+  <script src="js/PixelSprites.js"></script>
+  <script src="js/Furniture.js"></script>
+  <script src="js/PomodoroManager.js"></script>
+  <script src="js/TaskManager.js"></script>
+  <script src="js/GameScene.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node --check \"C:/Users/derby/The Game/public/js/GameScene.js\")",
+      "Bash(node --check \"C:/Users/derby/The Game/public/js/main.js\")",
+      "Bash(node --check \"C:/Users/derby/The Game/public/js/TaskManager.js\")",
+      "Bash(node --check \"C:/Users/derby/The Game/public/js/PomodoroManager.js\")",
+      "Bash(curl -s http://localhost:3000)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(taskkill /F /IM node.exe)"
+    ]
+  }
+}
