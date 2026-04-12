@@ -527,3 +527,41 @@ body { min-height: 100%; background: var(--bg); color: var(--text); font-family:
 }
 .lp-name-input:focus { border-color: var(--accent); }
 .lp-name-input::placeholder { color: var(--dim); }
+
+/* ── Avatar picker in guest prompt ──────────────────────── */
+.lp-avatar-pick-row {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin: 12px 0 8px;
+}
+.lp-gender-btn {
+  font-family: var(--font);
+  font-size: 8px;
+  background: #1a1a2e;
+  border: 2px solid var(--border);
+  color: var(--dim);
+  padding: 7px 18px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.lp-gender-btn.active,
+.lp-gender-btn:hover { border-color: var(--accent); color: var(--text); }
+
+.lp-color-pick-row {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-bottom: 14px;
+}
+.lp-color-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 3px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.1s;
+}
+.lp-color-swatch.active,
+.lp-color-swatch:hover { border-color: #fff; transform: scale(1.15); }

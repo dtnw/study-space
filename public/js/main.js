@@ -169,28 +169,43 @@
     }
   });
 
-  // Guest "don't lose progress" overlay on tab hide
+  // Guest "don't lose progress" overlay — shown once per hour on tab-hide
+  const _SAVE_PROMPT_MS = 60 * 60 * 1000; // 1 hour
+  function _showGuestSaveOverlay() {
+    document.getElementById('guest-save-overlay')?.remove();
+    const ov = document.createElement('div');
+    ov.id = 'guest-save-overlay';
+    ov.className = 'guest-save-overlay';
+    ov.innerHTML = `
+      <div class="guest-save-box">
+        <button class="guest-save-close-btn" id="guest-save-close-btn" title="Close">✕</button>
+        <div style="font-size:24px;margin-bottom:8px">🪙</div>
+        <h2 style="font-size:10px;margin-bottom:8px">DON'T LOSE YOUR PROGRESS!</h2>
+        <p style="font-size:7px;color:#aaa;line-height:2;margin-bottom:16px">Sign in to save your coins, tasks &amp; progress.</p>
+        <a href="/auth/twitch?role=player" class="pixel-btn" style="display:block;margin-bottom:8px;background:#9146FF;color:#fff;text-align:center;padding:10px;text-decoration:none">🟣 Save with Twitch</a>
+        <a href="/auth/google" class="pixel-btn" style="display:block;margin-bottom:12px;background:#4285F4;color:#fff;text-align:center;padding:10px;text-decoration:none">🔵 Save with Google</a>
+        <button id="guest-save-skip-btn" class="pixel-btn small" style="background:none;border:1px solid #333;color:#888;font-family:var(--font);font-size:7px;cursor:pointer;width:100%;padding:8px">Continue as guest</button>
+      </div>`;
+    document.body.appendChild(ov);
+    function _closeOverlay() {
+      ov.remove();
+      document.removeEventListener('keydown', _escHandler);
+    }
+    function _escHandler(e) { if (e.key === 'Escape') _closeOverlay(); }
+    document.getElementById('guest-save-close-btn')?.addEventListener('click', _closeOverlay);
+    document.getElementById('guest-save-skip-btn')?.addEventListener('click',  _closeOverlay);
+    ov.addEventListener('click', (e) => { if (e.target === ov) _closeOverlay(); });
+    document.addEventListener('keydown', _escHandler);
+  }
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'hidden') return;
     if (!_isGuest()) return;
-    const name = sessionStorage.getItem('studyspace_name');
-    if (!name) return;
-    let ov = document.getElementById('guest-save-overlay');
-    if (!ov) {
-      ov = document.createElement('div');
-      ov.id = 'guest-save-overlay';
-      ov.className = 'guest-save-overlay';
-      ov.innerHTML = `
-        <div class="guest-save-box">
-          <div style="font-size:24px;margin-bottom:8px">🪙</div>
-          <h2 style="font-size:10px;margin-bottom:8px">DON'T LOSE YOUR PROGRESS!</h2>
-          <p style="font-size:7px;color:#aaa;line-height:2;margin-bottom:16px">Sign in to save your coins, tasks, and progress.</p>
-          <a href="/auth/twitch?role=player" class="pixel-btn" style="display:block;margin-bottom:8px;background:#9146FF;color:#fff;text-align:center;padding:10px;text-decoration:none">🟣 Save with Twitch</a>
-          <a href="/auth/google" class="pixel-btn" style="display:block;margin-bottom:12px;background:#4285F4;color:#fff;text-align:center;padding:10px;text-decoration:none">🔵 Save with Google</a>
-          <button onclick="document.getElementById('guest-save-overlay').remove()" style="background:none;border:none;color:#666;font-family:var(--font);font-size:7px;cursor:pointer">Keep as guest</button>
-        </div>`;
-      document.body.appendChild(ov);
-    }
+    if (!sessionStorage.getItem('studyspace_name')) return;
+    // Only show once per hour
+    const last = parseInt(sessionStorage.getItem('cc_save_prompt_ts') || '0', 10);
+    if (Date.now() - last < _SAVE_PROMPT_MS) return;
+    sessionStorage.setItem('cc_save_prompt_ts', String(Date.now()));
+    _showGuestSaveOverlay();
   });
 
   socket.on('playerLeft', ({ id }) => {
@@ -319,7 +334,10 @@
         const nameInputEl = document.getElementById('name-input');
         if (nameInputEl) nameInputEl.value = session.name;
         sessionStorage.setItem('studyspace_name', session.name);
-        // Hide the modal immediately to avoid a flash before auto-join fires
+        // Restore avatar choices picked on the landing page
+        if (session.gender)     sessionStorage.setItem('studyspace_gender',     session.gender);
+        if (session.shirtColor) sessionStorage.setItem('studyspace_shirtColor', session.shirtColor);
+        // Hide the modal immediately so there's no flash before auto-join fires
         document.getElementById('name-modal')?.classList.add('hidden');
       }
       return;
