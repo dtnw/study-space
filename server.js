@@ -123,7 +123,7 @@ function saveCreatorCodes(codes) {
 // ── Twitch integration ────────────────────────────────────
 function loadTwitchConfig() {
   try { if (fs.existsSync(TWITCH_CONFIG_PATH)) return JSON.parse(fs.readFileSync(TWITCH_CONFIG_PATH, 'utf8')); } catch(e) {}
-  return { clientId: 'fxqfxb53bn48lhba6t8bt3bpi0o2h3', clientSecret: 'r5dfve4346jgu4k7mbxnh0x41bp7tp', redirectUri: 'https://study-space-production.up.railway.app/auth/twitch/callback' };
+  return { clientId: 'fxqfxb53bn48lhba6t8bt3bpi0o2h3', clientSecret: 'r5dfve4346jgu4k7mbxnh0x41bp7tp', redirectUri: 'https://study-space-production.up.railway.app/auth/twitch/callback', creatorLogin: 'derbysaren' };
 }
 function loadTwitchToken() {
   try { if (fs.existsSync(TWITCH_TOKEN_PATH)) return JSON.parse(fs.readFileSync(TWITCH_TOKEN_PATH, 'utf8')); } catch(e) {}
@@ -157,6 +157,22 @@ function saveSubscriptions(subs) {
 }
 let spaceStatus = { live: false, twitchUser: null, twitchLogin: null, streamTitle: null, viewerCount: 0, gameName: null };
 
+// ── App access token (client credentials, no user sign-in needed) ──
+let _appToken = { accessToken: null, expiresAt: 0 };
+async function getAppToken() {
+  if (_appToken.accessToken && Date.now() < _appToken.expiresAt - 60000) return _appToken.accessToken;
+  if (!twitchCfg.clientId || !twitchCfg.clientSecret) return null;
+  try {
+    const params = new URLSearchParams({ client_id: twitchCfg.clientId, client_secret: twitchCfg.clientSecret, grant_type: 'client_credentials' });
+    const data = await _httpsPost('id.twitch.tv', '/oauth2/token', params.toString());
+    if (data.access_token) {
+      _appToken = { accessToken: data.access_token, expiresAt: Date.now() + (data.expires_in || 3600) * 1000 };
+      return _appToken.accessToken;
+    }
+  } catch(e) { console.warn('App token fetch failed:', e.message); }
+  return null;
+}
+
 function _httpsPost(hostname, path, body) {
   return new Promise((resolve, reject) => {
     const buf = Buffer.from(body);
@@ -187,12 +203,24 @@ async function refreshTwitchToken() {
   return false;
 }
 async function checkLiveStatus() {
-  if (!twitchToken?.accessToken || !twitchToken?.twitchLogin || !twitchCfg.clientId) return;
+  // Determine which login to check — prefer connected creator, fall back to config
+  const loginToCheck = twitchToken?.twitchLogin || twitchCfg.creatorLogin || null;
+  if (!loginToCheck || !twitchCfg.clientId) return;
   try {
-    let r = await _httpsGet('api.twitch.tv', `/helix/streams?user_login=${twitchToken.twitchLogin}`, twitchHeaders(twitchToken.accessToken));
-    if (r.status === 401) { const ok = await refreshTwitchToken(); if (ok) r = await _httpsGet('api.twitch.tv', `/helix/streams?user_login=${twitchToken.twitchLogin}`, twitchHeaders(twitchToken.accessToken)); else return; }
+    // Use app access token (client credentials) — never expires due to user re-auth
+    const appTok = await getAppToken();
+    if (!appTok) return;
+    const r = await _httpsGet('api.twitch.tv', `/helix/streams?user_login=${loginToCheck}`, twitchHeaders(appTok));
+    if (r.status === 401) { _appToken = { accessToken: null, expiresAt: 0 }; return; } // will refresh next cycle
     const stream = r.body?.data?.[0];
-    spaceStatus = { live: !!stream, twitchUser: twitchToken.twitchDisplayName || twitchToken.twitchLogin, twitchLogin: twitchToken.twitchLogin, streamTitle: stream?.title || null, viewerCount: stream?.viewer_count || 0, gameName: stream?.game_name || null };
+    spaceStatus = {
+      live:        !!stream,
+      twitchUser:  twitchToken?.twitchDisplayName || twitchToken?.twitchLogin || loginToCheck,
+      twitchLogin: loginToCheck,
+      streamTitle: stream?.title || null,
+      viewerCount: stream?.viewer_count || 0,
+      gameName:    stream?.game_name || null,
+    };
     io.emit('spaceStatus', spaceStatus);
   } catch(e) { console.warn('Twitch check failed:', e.message); }
 }

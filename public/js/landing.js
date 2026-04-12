@@ -189,12 +189,52 @@ function _showSignInPrompt(targetPath) {
   document.getElementById('signin-guest-link')?.addEventListener('click', (e) => {
     e.preventDefault();
     modal.remove();
-    // Save guest session
+    _showGuestNamePrompt(targetPath);
+  });
+}
+
+function _showGuestNamePrompt(targetPath) {
+  let modal = document.getElementById('guest-name-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'guest-name-modal';
+    modal.className = 'lp-modal-overlay';
+    modal.innerHTML = `
+      <div class="lp-modal-box signin-prompt-box">
+        <h2 class="lp-modal-title">WHAT'S YOUR NAME?</h2>
+        <p class="lp-modal-sub">You're joining as a guest.</p>
+        <input type="text" id="guest-name-input" class="lp-name-input" placeholder="Enter your name…" maxlength="20" autocomplete="off" />
+        <p id="guest-name-error" style="color:#ff6b6b;font-size:7px;min-height:12px;margin:4px 0 0"></p>
+        <button id="guest-name-submit" class="lp-twitch-signin-btn" style="display:block;width:100%;margin-top:8px;border:none;cursor:pointer;font-family:var(--font)">Enter Space →</button>
+        <div style="text-align:center;margin-top:12px">
+          <a href="#" id="guest-back-to-signin" class="lp-guest-link">← Back to sign in options</a>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+  }
+  modal.classList.remove('hidden');
+  const input  = document.getElementById('guest-name-input');
+  const errEl  = document.getElementById('guest-name-error');
+  const submit = document.getElementById('guest-name-submit');
+  setTimeout(() => input?.focus(), 60);
+
+  function doEnter() {
+    const name = input?.value.trim();
+    if (!name) { if (errEl) errEl.textContent = 'Please enter a name!'; input?.focus(); return; }
+    modal.remove();
     localStorage.setItem('cc_session', JSON.stringify({
-      name: '', twitchLogin: null, googleEmail: null, profilePic: null,
+      name, twitchLogin: null, googleEmail: null, profilePic: null,
       authType: 'guest', expiresAt: Date.now() + 24 * 60 * 60 * 1000,
     }));
     window.location.href = targetPath;
+  }
+  submit?.addEventListener('click', doEnter);
+  input?.addEventListener('keydown', (e) => { if (e.key === 'Enter') doEnter(); });
+  document.getElementById('guest-back-to-signin')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    modal.remove();
+    _showSignInPrompt(targetPath);
   });
 }
 

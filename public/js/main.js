@@ -313,8 +313,18 @@
     try { session = JSON.parse(raw); } catch(e) { localStorage.removeItem('cc_session'); return; }
     if (!session || Date.now() > (session.expiresAt || 0)) { localStorage.removeItem('cc_session'); return; }
     window._ccSession = session;
-    if (session.authType === 'guest') return; // guests fill name in the modal manually
-    // Pre-fill identity
+    if (session.authType === 'guest') {
+      // Guest whose name was collected on the landing page — pre-fill and auto-join
+      if (session.name) {
+        const nameInputEl = document.getElementById('name-input');
+        if (nameInputEl) nameInputEl.value = session.name;
+        sessionStorage.setItem('studyspace_name', session.name);
+        // Hide the modal immediately to avoid a flash before auto-join fires
+        document.getElementById('name-modal')?.classList.add('hidden');
+      }
+      return;
+    }
+    // Pre-fill identity for OAuth users
     const nameInputEl = document.getElementById('name-input');
     if (nameInputEl && session.name) { nameInputEl.value = session.name; window._suppressAutoJoin = true; }
     sessionStorage.setItem('studyspace_name', session.name || '');

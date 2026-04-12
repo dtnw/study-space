@@ -510,3 +510,20 @@ body { min-height: 100%; background: var(--bg); color: var(--text); font-family:
 
 /* ── Sign-in prompt modal ────────────────────────────────── */
 .signin-prompt-box { min-width: 300px; }
+
+/* ── Guest name input ────────────────────────────────────── */
+.lp-name-input {
+  width: 100%;
+  font-family: var(--font);
+  font-size: 9px;
+  background: #0d0d1a;
+  border: 2px solid var(--border);
+  color: var(--text);
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  outline: none;
+  letter-spacing: 1px;
+  margin-top: 4px;
+}
+.lp-name-input:focus { border-color: var(--accent); }
+.lp-name-input::placeholder { color: var(--dim); }
