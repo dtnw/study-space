@@ -1,0 +1,8 @@
+{
+  "_instructions": "Get keys from https://dashboard.stripe.com — add your Monthly Creator subscription Price ID",
+  "secretKey": "",
+  "webhookSecret": "",
+  "priceId": "",
+  "successUrl": "http://localhost:3000/?stripe=success",
+  "cancelUrl": "http://localhost:3000/"
+}

@@ -457,3 +457,56 @@ body { min-height: 100%; background: var(--bg); color: var(--text); font-family:
   text-decoration: none;
 }
 .lp-guest-link:hover { color: var(--text); }
+
+/* ── Google sign-in button ───────────────────────────────── */
+.lp-google-signin-btn {
+  font-family: var(--font);
+  font-size: 9px;
+  background: #4285F4;
+  color: #fff;
+  text-decoration: none;
+  padding: 12px 24px;
+  border-radius: 4px;
+  transition: background 0.2s;
+  display: inline-block;
+}
+.lp-google-signin-btn:hover { background: #2b6fe0; }
+
+/* ── Landing page user pill (signed-in state) ────────────── */
+.lp-user-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.lp-user-avatar {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--border);
+}
+.lp-user-name {
+  font-family: var(--font);
+  font-size: 8px;
+  color: var(--text);
+}
+.lp-signout-btn {
+  font-family: var(--font);
+  font-size: 7px;
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--dim);
+  padding: 4px 8px;
+  border-radius: 2px;
+  cursor: pointer;
+}
+.lp-signout-btn:hover { border-color: var(--red); color: var(--red); }
+
+/* ── Room enter offline ───────────────────────────────────── */
+.room-enter-offline {
+  background: #2a2a3e !important;
+  color: #888 !important;
+}
+.room-enter-offline:hover { filter: brightness(1.2); }
+
+/* ── Sign-in prompt modal ────────────────────────────────── */
+.signin-prompt-box { min-width: 300px; }

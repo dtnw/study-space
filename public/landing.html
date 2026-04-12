@@ -14,7 +14,9 @@
   <header class="lp-header">
     <div class="lp-logo">🌸 Cozy Corner</div>
     <div class="lp-nav">
-      <a href="https://twitch.tv/derbysaren" target="_blank" rel="noopener" class="lp-nav-link">📺 Watch Derby</a>
+      <div id="lp-auth-area">
+        <a href="/auth/twitch?role=player" class="lp-nav-link">🟣 Sign in</a>
+      </div>
     </div>
   </header>
 
@@ -35,8 +37,9 @@
         <div class="lp-feature-pill">🌿 Decorate Your Space</div>
       </div>
       <div class="lp-hero-auth">
-        <a href="/auth/twitch?role=player&return=/play" class="lp-twitch-signin-btn">🟣 Sign in with Twitch to Play</a>
-        <a href="/play?preview=1" class="lp-guest-link">or browse as guest →</a>
+        <a href="/auth/twitch?role=player" class="lp-twitch-signin-btn">🟣 Sign in with Twitch</a>
+        <a href="/auth/google" class="lp-google-signin-btn">🔵 Sign in with Google</a>
+        <a href="#" class="lp-guest-link" onclick="event.preventDefault(); _showSignInPrompt('/play')">Continue as guest</a>
       </div>
     </section>
 

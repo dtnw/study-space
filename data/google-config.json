@@ -1,0 +1,6 @@
+{
+  "_instructions": "Register your app at https://console.cloud.google.com — enable Google OAuth 2.0, add http://localhost:3000/auth/google/callback as an Authorized redirect URI",
+  "clientId": "",
+  "clientSecret": "",
+  "redirectUri": "http://localhost:3000/auth/google/callback"
+}

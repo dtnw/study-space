@@ -8,6 +8,40 @@
  */
 
 (function () {
+  // ── Single-tab enforcement (signed-in users only) ──────────
+  const _myTabId = 'tab-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+  const _tabChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('cc_game_tab') : null;
+  (function _initTabEnforcement() {
+    const raw = localStorage.getItem('cc_session');
+    if (!raw) return;
+    let session; try { session = JSON.parse(raw); } catch(e) { return; }
+    if (!session || session.authType === 'guest') return;
+    // Claim this tab
+    function _claimTab() {
+      localStorage.setItem('cc_active_game_tab', JSON.stringify({ tabId: _myTabId, user: session.name, ts: Date.now() }));
+      _tabChannel?.postMessage({ type: 'tabOpened', tabId: _myTabId, user: session.name });
+    }
+    // Show overlay when another tab claims
+    function _showTabConflict() {
+      let ov = document.getElementById('tab-conflict-overlay');
+      if (!ov) {
+        ov = document.createElement('div');
+        ov.id = 'tab-conflict-overlay';
+        ov.className = 'tab-conflict-overlay';
+        ov.innerHTML = '<div class="tab-conflict-box"><div class="tab-conflict-icon">🌸</div><p class="tab-conflict-msg">Cozy Corner is open in another window.</p><button id="tab-take-over-btn" class="pixel-btn">Refresh to use this window</button></div>';
+        document.body.appendChild(ov);
+        document.getElementById('tab-take-over-btn')?.addEventListener('click', () => { _claimTab(); ov.remove(); });
+      }
+    }
+    if (_tabChannel) {
+      _tabChannel.onmessage = (e) => {
+        if (e.data?.type === 'tabOpened' && e.data.tabId !== _myTabId) _showTabConflict();
+      };
+    }
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') _claimTab(); });
+    _claimTab();
+  })();
+
   // ── Shared game state (read by GameScene) ──────────────────
   window.gameState = {
     playerName: '',
@@ -22,10 +56,20 @@
   // Current player's role: 'creator' | 'mod' | 'regular'
   window.myRole = 'regular';
 
+  function _isGuest() { return !window._ccSession || window._ccSession.authType === 'guest'; }
+  function _requireAuth(action) {
+    if (_isGuest()) {
+      showToast('✨ Sign in to ' + action + '!');
+      return false;
+    }
+    return true;
+  }
+
   window.socialState = {
     friends: [],
     requests: [],
     sendFriendRequest(toId, toName) {
+      if (_isGuest()) { showToast('✨ Sign in to add friends!'); return; }
       if (this.friends.find(f => f.id === toId)) { showToast('Already friends!'); return; }
       if (toId.startsWith('npc-')) {
         showToast('Friend request sent to ' + toName + '!');
@@ -52,6 +96,22 @@
   socket.on('spaceStatus', (status) => {
     window._spaceStatus = status;
     window._updateSpacePanel?.(status);
+    // Streamer bar
+    const bar = document.getElementById('streamer-bar');
+    if (bar) {
+      if (status.live && status.twitchLogin) {
+        const url = 'https://twitch.tv/' + encodeURIComponent(status.twitchLogin);
+        const watchBtn = document.getElementById('watch-live-btn');
+        const followBtn = document.getElementById('follow-btn');
+        const handle = document.getElementById('streamer-bar-handle');
+        if (watchBtn) watchBtn.href = url;
+        if (followBtn) followBtn.href = url;
+        if (handle) handle.textContent = status.twitchLogin;
+        bar.classList.remove('hidden');
+      } else {
+        bar.classList.add('hidden');
+      }
+    }
   });
 
   socket.on('init', ({ tasks }) => {
@@ -106,6 +166,30 @@
     if (p) {
       sessionStorage.setItem('studyspace_x', p.x);
       sessionStorage.setItem('studyspace_y', p.y);
+    }
+  });
+
+  // Guest "don't lose progress" overlay on tab hide
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'hidden') return;
+    if (!_isGuest()) return;
+    const name = sessionStorage.getItem('studyspace_name');
+    if (!name) return;
+    let ov = document.getElementById('guest-save-overlay');
+    if (!ov) {
+      ov = document.createElement('div');
+      ov.id = 'guest-save-overlay';
+      ov.className = 'guest-save-overlay';
+      ov.innerHTML = `
+        <div class="guest-save-box">
+          <div style="font-size:24px;margin-bottom:8px">🪙</div>
+          <h2 style="font-size:10px;margin-bottom:8px">DON'T LOSE YOUR PROGRESS!</h2>
+          <p style="font-size:7px;color:#aaa;line-height:2;margin-bottom:16px">Sign in to save your coins, tasks, and progress.</p>
+          <a href="/auth/twitch?role=player" class="pixel-btn" style="display:block;margin-bottom:8px;background:#9146FF;color:#fff;text-align:center;padding:10px;text-decoration:none">🟣 Save with Twitch</a>
+          <a href="/auth/google" class="pixel-btn" style="display:block;margin-bottom:12px;background:#4285F4;color:#fff;text-align:center;padding:10px;text-decoration:none">🔵 Save with Google</a>
+          <button onclick="document.getElementById('guest-save-overlay').remove()" style="background:none;border:none;color:#666;font-family:var(--font);font-size:7px;cursor:pointer">Keep as guest</button>
+        </div>`;
+      document.body.appendChild(ov);
     }
   });
 
@@ -168,6 +252,7 @@
     document.getElementById('clear-tasks-btn')?.classList.toggle('hidden', role === 'regular');
     if (role !== 'regular') window.socket?.emit('getBannedList');
     window._refreshSpacesPanel?.();
+    document.getElementById('diy-creator-toggle')?.classList.toggle('hidden', role !== 'creator');
   });
 
   socket.on('playerRoleUpdated', ({ id, role }) => {
@@ -219,32 +304,34 @@
   // ── Gender toggle ──────────────────────────────────────────
   let _selectedGender = 'male';
 
-  // ── Twitch player session detection ─────────────────────────
+  // ── Read auth session from localStorage ────────────────────
   window._suppressAutoJoin = false;
-  (async function _initTwitchSession() {
-    const params = new URLSearchParams(location.search);
-    const psid   = params.get('psid');
-    if (!psid) return;
-    window._suppressAutoJoin = true;
-    history.replaceState({}, '', '/play');
-    try {
-      const res = await fetch('/api/session/' + encodeURIComponent(psid));
-      if (!res.ok) { window._suppressAutoJoin = false; return; }
-      const data = await res.json();
-      const nameInputEl = document.getElementById('name-input');
-      if (nameInputEl) nameInputEl.value = data.name || '';
-      sessionStorage.setItem('studyspace_name', data.name || '');
-      window._twitchSession = data;
-      document.getElementById('nm-guest-state')?.classList.add('hidden');
-      const ts = document.getElementById('nm-twitch-state');
-      if (ts) ts.classList.remove('hidden');
-      const wt = document.getElementById('nm-welcome-text');
-      if (wt) wt.textContent = 'WELCOME BACK!';
-      const th = document.getElementById('nm-twitch-handle');
-      if (th) th.textContent = '@' + (data.twitchLogin || data.name || '');
-      const av = document.getElementById('nm-avatar');
-      if (av && data.profilePic) { av.src = data.profilePic; av.style.display = 'block'; }
-    } catch(e) { window._suppressAutoJoin = false; }
+  (function _initSessionFromStorage() {
+    const raw = localStorage.getItem('cc_session');
+    if (!raw) return;
+    let session;
+    try { session = JSON.parse(raw); } catch(e) { localStorage.removeItem('cc_session'); return; }
+    if (!session || Date.now() > (session.expiresAt || 0)) { localStorage.removeItem('cc_session'); return; }
+    window._ccSession = session;
+    if (session.authType === 'guest') return; // guests fill name in the modal manually
+    // Pre-fill identity
+    const nameInputEl = document.getElementById('name-input');
+    if (nameInputEl && session.name) { nameInputEl.value = session.name; window._suppressAutoJoin = true; }
+    sessionStorage.setItem('studyspace_name', session.name || '');
+    // Show Twitch/Google welcome state
+    document.getElementById('nm-guest-state')?.classList.add('hidden');
+    const ts = document.getElementById('nm-twitch-state');
+    if (ts) ts.classList.remove('hidden');
+    const wt = document.getElementById('nm-welcome-text');
+    if (wt) wt.textContent = 'WELCOME BACK!';
+    const th = document.getElementById('nm-twitch-handle');
+    if (th) {
+      th.textContent = session.twitchLogin ? '@' + session.twitchLogin
+        : session.googleEmail ? session.googleEmail
+        : session.name;
+    }
+    const av = document.getElementById('nm-avatar');
+    if (av && session.profilePic) { av.src = session.profilePic; av.style.display = 'block'; }
   })();
 
   document.getElementById('gender-boy-btn').addEventListener('click', () => {
@@ -409,6 +496,7 @@
     if (!confirm('Log out and return to the welcome screen?')) return;
     window.socket?.disconnect();
     sessionStorage.clear();
+    localStorage.removeItem('cc_session');
     window.location.reload();
   });
 
@@ -1222,6 +1310,7 @@
   }
 
   function _sendFriendChat() {
+    if (_isGuest()) { showToast('✨ Sign in to send messages!'); return; }
     const input = document.getElementById('friend-chat-input');
     if (!input || !_activeChatId || input.disabled) return;
     const text = input.value.trim();

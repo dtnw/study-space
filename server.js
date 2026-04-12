@@ -51,10 +51,6 @@ const io = new Server(httpServer);
 // ── Page routes ──────────────────────────────────────────
 app.get('/',     (req, res) => res.sendFile(path.join(__dirname, 'public', 'landing.html')));
 app.get('/play', (req, res) => {
-  const bypass = req.query.preview || req.query.twitch || req.query.psid;
-  if (!spaceStatus.live && !bypass) {
-    return res.redirect('/?msg=offline');
-  }
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
@@ -138,6 +134,27 @@ function saveTwitchToken(t) {
 }
 let twitchCfg   = loadTwitchConfig();
 let twitchToken = loadTwitchToken();
+
+const GOOGLE_CONFIG_PATH = path.join(__dirname, 'data', 'google-config.json');
+function loadGoogleConfig() {
+  try { if (fs.existsSync(GOOGLE_CONFIG_PATH)) return JSON.parse(fs.readFileSync(GOOGLE_CONFIG_PATH, 'utf8')); } catch(e) {}
+  return { clientId: '', clientSecret: '', redirectUri: 'http://localhost:3000/auth/google/callback' };
+}
+let googleCfg = loadGoogleConfig();
+
+const STRIPE_CONFIG_PATH  = path.join(__dirname, 'data', 'stripe-config.json');
+const SUBSCRIPTIONS_PATH  = path.join(__dirname, 'data', 'subscriptions.json');
+function loadStripeConfig() {
+  try { if (fs.existsSync(STRIPE_CONFIG_PATH)) return JSON.parse(fs.readFileSync(STRIPE_CONFIG_PATH, 'utf8')); } catch(e) {}
+  return { secretKey: '', webhookSecret: '', priceId: '', successUrl: 'http://localhost:3000/?stripe=success', cancelUrl: 'http://localhost:3000/' };
+}
+function loadSubscriptions() {
+  try { if (fs.existsSync(SUBSCRIPTIONS_PATH)) return JSON.parse(fs.readFileSync(SUBSCRIPTIONS_PATH, 'utf8')); } catch(e) {}
+  return [];
+}
+function saveSubscriptions(subs) {
+  try { fs.mkdirSync(path.dirname(SUBSCRIPTIONS_PATH), { recursive: true }); fs.writeFileSync(SUBSCRIPTIONS_PATH, JSON.stringify(subs, null, 2)); } catch(e) {}
+}
 let spaceStatus = { live: false, twitchUser: null, twitchLogin: null, streamTitle: null, viewerCount: 0, gameName: null };
 
 function _httpsPost(hostname, path, body) {
@@ -218,7 +235,9 @@ app.get('/auth/twitch/callback', async (req, res) => {
       playerSessions.set(token, {
         name:        user?.display_name || user?.login || 'Viewer',
         twitchLogin: user?.login || null,
+        googleEmail: null,
         profilePic:  user?.profile_image_url || null,
+        authType:    'twitch',
         expiresAt:   Date.now() + 10 * 60 * 1000,
       });
       return res.redirect(`/play?psid=${token}`);
@@ -236,6 +255,43 @@ app.post('/auth/twitch/disconnect', (req, res) => {
   io.emit('spaceStatus', spaceStatus); res.json({ ok: true });
 });
 
+app.get('/auth/google', (req, res) => {
+  if (!googleCfg.clientId) return res.send('<h2>Set clientId in data/google-config.json first.</h2>');
+  const state = Buffer.from(JSON.stringify({ role: 'player', return: '/' })).toString('base64url');
+  const p = new URLSearchParams({
+    client_id:     googleCfg.clientId,
+    redirect_uri:  googleCfg.redirectUri,
+    response_type: 'code',
+    scope:         'openid email profile',
+    state,
+    access_type:   'offline',
+    prompt:        'select_account',
+  });
+  res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${p}`);
+});
+
+app.get('/auth/google/callback', async (req, res) => {
+  const { code, error } = req.query;
+  if (error || !code) return res.redirect('/?google=error');
+  try {
+    const params = new URLSearchParams({ client_id: googleCfg.clientId, client_secret: googleCfg.clientSecret, code, grant_type: 'authorization_code', redirect_uri: googleCfg.redirectUri });
+    const tokenData = await _httpsPost('oauth2.googleapis.com', '/token', params.toString());
+    if (!tokenData.access_token) return res.redirect('/?google=error');
+    const userResp = await _httpsGet('openidconnect.googleapis.com', '/v1/userinfo', { 'Authorization': `Bearer ${tokenData.access_token}` });
+    const user = userResp.body;
+    const token = 'ps-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9);
+    playerSessions.set(token, {
+      name:        user?.name || user?.given_name || 'Player',
+      twitchLogin: null,
+      googleEmail: user?.email || null,
+      profilePic:  user?.picture || null,
+      authType:    'google',
+      expiresAt:   Date.now() + 10 * 60 * 1000,
+    });
+    res.redirect(`/?psid=${token}`);
+  } catch(e) { console.error('Google OAuth error:', e); res.redirect('/?google=error'); }
+});
+
 app.get('/api/session/:token', (req, res) => {
   const session = playerSessions.get(req.params.token);
   if (!session || Date.now() > session.expiresAt) {
@@ -243,14 +299,14 @@ app.get('/api/session/:token', (req, res) => {
     return res.status(404).json({ error: 'invalid' });
   }
   playerSessions.delete(req.params.token);
-  res.json({ name: session.name, twitchLogin: session.twitchLogin, profilePic: session.profilePic });
+  res.json({ name: session.name, twitchLogin: session.twitchLogin, googleEmail: session.googleEmail || null, profilePic: session.profilePic, authType: session.authType || 'twitch' });
 });
 
 app.get('/api/twitch/status', (req, res) => res.json(spaceStatus));
 app.get('/api/twitch/config', (req, res) => res.json({ configured: !!(twitchCfg.clientId && twitchCfg.clientSecret), connected: !!twitchToken?.twitchLogin, twitchUser: twitchToken?.twitchDisplayName || null, profileImageUrl: twitchToken?.profileImageUrl || null }));
 
 app.get('/api/spaces', (req, res) => {
-  res.json([{
+  const spaces = [{
     id:           'derbysaren',
     name:         "Derby's Study Space",
     twitchLogin:  twitchToken?.twitchLogin || 'derbysaren',
@@ -258,12 +314,18 @@ app.get('/api/spaces', (req, res) => {
     roomPath:     '/play',
     live:          spaceStatus.live,
     streamTitle:   spaceStatus.streamTitle,
-    viewerCount:   spaceStatus.viewerCount,
+    viewerCount:   spaceStatus.viewerCount || 0,
     gameName:      spaceStatus.gameName,
     twitchUser:    spaceStatus.twitchUser,
     playersOnline: Object.keys(players).length,
     creatorAvatar: twitchToken?.profileImageUrl || null,
-  }]);
+  }];
+  spaces.sort((a, b) => {
+    const sA = (a.live ? 100000 : 0) + (a.viewerCount * 100) + (a.playersOnline * 50);
+    const sB = (b.live ? 100000 : 0) + (b.viewerCount * 100) + (b.playersOnline * 50);
+    return sB - sA;
+  });
+  res.json(spaces);
 });
 
 app.post('/api/creator-codes/validate', (req, res) => {
@@ -284,6 +346,42 @@ app.get('/admin/generate-code', (req, res) => {
   codes.push({ code, used: false, usedBy: null, createdAt: new Date().toISOString() });
   saveCreatorCodes(codes);
   res.json({ code, note: 'Share this with your customer. It can only be used once.' });
+});
+
+app.get('/api/stripe/checkout', async (req, res) => {
+  const stripeCfg = loadStripeConfig();
+  if (!stripeCfg.secretKey) return res.status(503).json({ error: 'Stripe not configured — add secretKey to data/stripe-config.json' });
+  let stripe;
+  try { stripe = require('stripe')(stripeCfg.secretKey); } catch(e) { return res.status(503).json({ error: 'Run: npm install stripe' }); }
+  try {
+    const session = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      line_items: [{ price: stripeCfg.priceId, quantity: 1 }],
+      success_url: stripeCfg.successUrl,
+      cancel_url:  stripeCfg.cancelUrl,
+    });
+    res.redirect(303, session.url);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  const stripeCfg = loadStripeConfig();
+  if (!stripeCfg.secretKey) return res.status(503).send('not configured');
+  let stripe;
+  try { stripe = require('stripe')(stripeCfg.secretKey); } catch(e) { return res.status(503).send('stripe not installed'); }
+  let event;
+  try { event = stripe.webhooks.constructEvent(req.body, req.headers['stripe-signature'], stripeCfg.webhookSecret); } catch(e) { return res.status(400).send('Webhook signature failed'); }
+  if (['checkout.session.completed','customer.subscription.created'].includes(event.type)) {
+    const obj = event.data.object;
+    const subs = loadSubscriptions();
+    subs.push({ customerId: obj.customer, email: obj.customer_email || obj.customer_details?.email || null, subscriptionId: obj.subscription || obj.id, status: 'active', createdAt: new Date().toISOString() });
+    saveSubscriptions(subs);
+  }
+  if (event.type === 'customer.subscription.deleted') {
+    const subs = loadSubscriptions().map(s => s.subscriptionId === event.data.object.id ? {...s, status:'canceled'} : s);
+    saveSubscriptions(subs);
+  }
+  res.json({ received: true });
 });
 
 io.on('connection', (socket) => {

@@ -4,6 +4,61 @@
  * Uses Socket.io for real-time live-status updates.
  */
 
+// ── Consume OAuth callback session ────────────────────────
+(async function _consumePsid() {
+  const params = new URLSearchParams(location.search);
+  const psid = params.get('psid');
+  const googleErr = params.get('google');
+  if (googleErr === 'error') { history.replaceState({}, '', '/'); /* will show toast after loadSpaces */ }
+  if (!psid) return;
+  history.replaceState({}, '', '/');
+  try {
+    const res = await fetch('/api/session/' + encodeURIComponent(psid));
+    if (!res.ok) return;
+    const data = await res.json();
+    localStorage.setItem('cc_session', JSON.stringify({
+      name:        data.name,
+      twitchLogin: data.twitchLogin || null,
+      googleEmail: data.googleEmail || null,
+      profilePic:  data.profilePic  || null,
+      authType:    data.authType    || 'twitch',
+      expiresAt:   Date.now() + 7 * 24 * 60 * 60 * 1000,
+    }));
+    _updateLandingHeader();
+  } catch(e) {}
+})();
+
+function _getSession() {
+  try {
+    const raw = localStorage.getItem('cc_session');
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    if (Date.now() > s.expiresAt) { localStorage.removeItem('cc_session'); return null; }
+    return s;
+  } catch(e) { return null; }
+}
+
+function _updateLandingHeader() {
+  const session = _getSession();
+  const authArea = document.getElementById('lp-auth-area');
+  if (!authArea) return;
+  if (session && session.authType !== 'guest') {
+    authArea.innerHTML = `
+      <div class="lp-user-pill">
+        ${session.profilePic ? `<img src="${esc(session.profilePic)}" class="lp-user-avatar" alt="" />` : ''}
+        <span class="lp-user-name">${esc(session.name)}</span>
+        <button class="lp-signout-btn" onclick="window._signOut()">Sign out</button>
+      </div>`;
+  } else {
+    authArea.innerHTML = `<a href="/auth/twitch?role=player" class="lp-nav-link">🟣 Sign in</a>`;
+  }
+}
+
+window._signOut = function() {
+  localStorage.removeItem('cc_session');
+  _updateLandingHeader();
+};
+
 // ── Star canvas ────────────────────────────────────────────
 (function () {
   const canvas = document.getElementById('star-canvas');
@@ -80,7 +135,7 @@ function renderSpaces(spaces) {
       : `<span class="room-banner-icon">🌸</span>`;
     const enterBtn = isLive
       ? `<a href="${esc(space.roomPath)}" class="room-enter-btn" onclick="event.stopPropagation()">Enter Space →</a>`
-      : `<button class="room-enter-btn room-enter-disabled" disabled>Stream Offline</button>`;
+      : `<a href="${esc(space.roomPath)}" class="room-enter-btn room-enter-offline" onclick="event.stopPropagation()">Enter Space (Offline)</a>`;
 
     return `
       <div class="room-card ${cls}" onclick="enterSpace('${esc(space.roomPath)}')">
@@ -102,7 +157,45 @@ function renderSpaces(spaces) {
 }
 
 function enterSpace(path) {
+  const session = _getSession();
+  if (!session) {
+    // Not signed in — show sign-in prompt modal
+    _showSignInPrompt(path);
+    return;
+  }
   window.location.href = path;
+}
+
+function _showSignInPrompt(targetPath) {
+  let modal = document.getElementById('signin-prompt-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'signin-prompt-modal';
+    modal.className = 'lp-modal-overlay';
+    modal.innerHTML = `
+      <div class="lp-modal-box signin-prompt-box">
+        <h2 class="lp-modal-title">JOIN THE SPACE</h2>
+        <p class="lp-modal-sub">Sign in to save your coins, tasks, and friends.</p>
+        <a href="/auth/twitch?role=player" class="lp-twitch-signin-btn" style="display:block;text-align:center;margin-bottom:10px">🟣 Sign in with Twitch</a>
+        <a href="/auth/google" class="lp-google-signin-btn" style="display:block;text-align:center;margin-bottom:16px">🔵 Sign in with Google</a>
+        <div style="text-align:center">
+          <a href="#" class="lp-guest-link" id="signin-guest-link">Continue as guest →</a>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+  }
+  modal.classList.remove('hidden');
+  document.getElementById('signin-guest-link')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    modal.remove();
+    // Save guest session
+    localStorage.setItem('cc_session', JSON.stringify({
+      name: '', twitchLogin: null, googleEmail: null, profilePic: null,
+      authType: 'guest', expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+    }));
+    window.location.href = targetPath;
+  });
 }
 
 function esc(str) {
@@ -139,6 +232,9 @@ try {
   const socket = io();
   socket.on('spaceStatus', () => loadSpaces());  // re-fetch on any live status change
 } catch(e) {}
+
+// Update header on load
+_updateLandingHeader();
 
 function openCreatorModal() {
   document.getElementById('creator-modal')?.classList.remove('hidden');

@@ -1,1 +1,38 @@
-[]
+[
+  {
+    "code": "CC-2M21D6",
+    "used": false,
+    "usedBy": null,
+    "createdAt": "2026-04-12T13:15:22.812Z"
+  },
+  {
+    "code": "CC-BRCLWK",
+    "used": false,
+    "usedBy": null,
+    "createdAt": "2026-04-12T13:15:22.824Z"
+  },
+  {
+    "code": "CC-ZEBY2M",
+    "used": false,
+    "usedBy": null,
+    "createdAt": "2026-04-12T13:15:22.834Z"
+  },
+  {
+    "code": "CC-O64JHO",
+    "used": false,
+    "usedBy": null,
+    "createdAt": "2026-04-12T13:15:22.845Z"
+  },
+  {
+    "code": "CC-2QJ39Z",
+    "used": false,
+    "usedBy": null,
+    "createdAt": "2026-04-12T13:15:22.855Z"
+  },
+  {
+    "code": "CC-ODKG6L",
+    "used": false,
+    "usedBy": null,
+    "createdAt": "2026-04-12T13:15:22.865Z"
+  }
+]

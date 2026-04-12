@@ -172,7 +172,7 @@
 
       <!-- Always visible: toggle row -->
       <div id="diy-toprow">
-        <button id="diy-creator-toggle" class="pixel-btn small">🔧 DIY CREATOR</button>
+        <button id="diy-creator-toggle" class="pixel-btn small hidden">🔧 DIY CREATOR</button>
       </div>
 
       <!-- Expanded creator panel -->
@@ -268,6 +268,13 @@
 
       </div>
     </footer>
+
+  <!-- ── STREAMER BAR ──────────────────────────────────────── -->
+  <div id="streamer-bar" class="streamer-bar hidden">
+    <a id="watch-live-btn" href="#" target="_blank" rel="noopener" class="streamer-bar-btn watch-btn">🔴 Watch Live on Twitch</a>
+    <a id="follow-btn" href="#" target="_blank" rel="noopener" class="streamer-bar-btn follow-btn">💜 Follow @<span id="streamer-bar-handle">...</span></a>
+  </div>
+
   </div>
 
   <!-- ── SPACES PANEL ─────────────────────────────────────── -->
@@ -351,13 +358,14 @@
   <!-- Name entry (shown on first load) -->
   <div id="name-modal" class="modal-overlay active">
     <div class="modal-box">
-      <!-- STATE A: No Twitch session — guest/sign-in choice -->
+      <!-- STATE A: No session — sign-in choice -->
       <div id="nm-guest-state">
-        <h2>WELCOME!</h2>
-        <p style="font-size:7px;line-height:2;color:#aaa;margin-bottom:12px">Sign in with Twitch to use your streamer name — or play as a guest.</p>
-        <a href="/auth/twitch?role=player&return=/play" class="pixel-btn nm-twitch-signin">🟣 Sign in with Twitch</a>
-        <div class="nm-divider">— or play as guest —</div>
-        <input type="text" id="name-input" class="pixel-input" placeholder="Guest name…" maxlength="16" autocomplete="off" />
+        <h2>JOIN THE SPACE</h2>
+        <p style="font-size:7px;line-height:2;color:#aaa;margin-bottom:14px">Sign in to save your coins, tasks &amp; friends.</p>
+        <a href="/auth/twitch?role=player" class="pixel-btn nm-twitch-signin">🟣 Sign in with Twitch</a>
+        <a href="/auth/google" class="pixel-btn nm-google-signin">🔵 Sign in with Google</a>
+        <div class="nm-divider">— or —</div>
+        <input type="text" id="name-input" class="pixel-input" placeholder="Continue as guest…" maxlength="16" autocomplete="off" />
         <p id="name-error" class="name-error"></p>
       </div>
 

@@ -1508,8 +1508,87 @@ body:has(.modal-overlay.active) #game-container canvas { pointer-events: none; }
   font-size: 8px;
 }
 .nm-twitch-signin:hover { background: #7d3ae8; }
+.nm-google-signin {
+  display: block;
+  text-align: center;
+  background: #4285F4;
+  color: #fff;
+  margin: 6px auto 4px;
+  text-decoration: none;
+  padding: 9px 16px;
+  font-size: 8px;
+}
+.nm-google-signin:hover { background: #2b6fe0; }
 .nm-divider { font-size: 7px; color: #666; text-align: center; margin: 10px 0 8px; }
 .nm-twitch-welcome { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 .nm-avatar-img { width: 52px; height: 52px; border-radius: 50%; border: 2px solid #9B6BDB; object-fit: cover; }
 .nm-twitch-handle { font-size: 7px; color: #9B6BDB; margin-top: 4px; }
 #nm-twitch-state.hidden, #nm-guest-state.hidden { display: none; }
+
+/* ── Streamer bar ────────────────────────────────────────── */
+.streamer-bar {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  z-index: 600;
+  background: rgba(10,10,20,0.95);
+  border-top: 2px solid #9146FF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 8px 20px;
+}
+.streamer-bar.hidden { display: none; }
+.streamer-bar-btn {
+  font-family: var(--font);
+  font-size: 8px;
+  color: #fff;
+  text-decoration: none;
+  padding: 7px 16px;
+  border-radius: 4px;
+  transition: opacity 0.2s;
+}
+.streamer-bar-btn:hover { opacity: 0.85; }
+.watch-btn  { background: #e91916; }
+.follow-btn { background: #9146FF; }
+
+/* ── Tab conflict overlay ────────────────────────────────── */
+.tab-conflict-overlay {
+  position: fixed; inset: 0;
+  background: rgba(5,5,15,0.97);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.tab-conflict-box {
+  text-align: center;
+  padding: 40px;
+}
+.tab-conflict-icon { font-size: 48px; margin-bottom: 20px; }
+.tab-conflict-msg {
+  font-family: var(--font);
+  font-size: 10px;
+  color: var(--text);
+  margin-bottom: 24px;
+  line-height: 2;
+}
+
+/* ── Guest save overlay ──────────────────────────────────── */
+.guest-save-overlay {
+  position: fixed; inset: 0;
+  background: rgba(5,5,15,0.92);
+  z-index: 8000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.guest-save-box {
+  background: #111120;
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  padding: 32px;
+  max-width: 340px;
+  width: 90%;
+  text-align: center;
+}
