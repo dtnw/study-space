@@ -1,0 +1,18 @@
+[
+  {
+    "id": "dummy-1",
+    "text": "Read 20 pages of a book",
+    "playerName": "Sakura",
+    "playerId": "dummy-player-1",
+    "completed": false,
+    "createdAt": "2026-04-12T08:20:39.981Z"
+  },
+  {
+    "id": "dummy-2",
+    "text": "Finish the project proposal",
+    "playerName": "Hiro",
+    "playerId": "dummy-player-2",
+    "completed": false,
+    "createdAt": "2026-04-12T08:20:39.982Z"
+  }
+]

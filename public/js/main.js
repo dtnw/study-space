@@ -17,6 +17,10 @@
 
   // All players currently in the space (excluding self)
   window._allPlayers = {};
+  // Server-confirmed taken chair IDs (prevents overlap even with blocked/invisible players)
+  window._takenChairs = new Set();
+  // Current player's role: 'creator' | 'mod' | 'regular'
+  window.myRole = 'regular';
 
   window.socialState = {
     friends: [],
@@ -43,6 +47,12 @@
   // ── Socket.io ──────────────────────────────────────────────
   const socket = io();
   window.socket = socket;
+  window.CallManager?.wireSocketEvents();
+
+  socket.on('spaceStatus', (status) => {
+    window._spaceStatus = status;
+    window._updateSpacePanel?.(status);
+  });
 
   socket.on('init', ({ tasks }) => {
     window.TaskManager.onInit(tasks);
@@ -59,7 +69,8 @@
 
   socket.on('existingPlayers', (list) => {
     list.forEach(p => {
-      window._allPlayers[p.id] = { id: p.id, name: p.name, chatPreference: p.chatPreference || 'sociable' };
+      if (_blockedIds.some(b => b.id === p.id)) return;
+      window._allPlayers[p.id] = { id: p.id, name: p.name, chatPreference: p.chatPreference || 'sociable', role: p.role || 'regular' };
       if (window.gameScene) window.gameScene._spawnOtherPlayer(p);
       else { window._pendingPlayers = window._pendingPlayers || []; window._pendingPlayers.push(p); }
     });
@@ -67,13 +78,36 @@
   });
 
   socket.on('playerJoined', (p) => {
-    window._allPlayers[p.id] = { id: p.id, name: p.name, chatPreference: p.chatPreference || 'sociable' };
+    if (_blockedIds.some(b => b.id === p.id)) return;
+    // If already known (e.g. after unblock), remove old sprite first
+    if (window._allPlayers[p.id]) window.gameScene?._removeOtherPlayer(p.id);
+    window._allPlayers[p.id] = { id: p.id, name: p.name, chatPreference: p.chatPreference || 'sociable', role: p.role || 'regular' };
     if (window.gameScene) window.gameScene._spawnOtherPlayer(p);
     else { window._pendingPlayers = window._pendingPlayers || []; window._pendingPlayers.push(p); }
     _renderMembersList();
   });
 
-  socket.on('playerMoved', ({ id, x, y }) => { window.gameScene?._moveOtherPlayer(id, x, y); });
+  socket.on('playerMoved', ({ id, x, y }) => {
+    if (_blockedIds.some(b => b.id === id)) return;
+    window.gameScene?._moveOtherPlayer(id, x, y);
+  });
+
+  // Server confirms our spawn position (restored from last session)
+  socket.on('spawnAt', ({ x, y }) => {
+    window._pendingSpawn = { x, y };
+    if (window.gameScene?.player) {
+      window.gameScene.player.setPosition(x, y);
+    }
+  });
+
+  // Save position before the page unloads so we can restore it on refresh
+  window.addEventListener('beforeunload', () => {
+    const p = window.gameScene?.player;
+    if (p) {
+      sessionStorage.setItem('studyspace_x', p.x);
+      sessionStorage.setItem('studyspace_y', p.y);
+    }
+  });
 
   socket.on('playerLeft', ({ id }) => {
     delete window._allPlayers[id];
@@ -88,6 +122,8 @@
     const op = window.gameScene?.otherPlayers?.[id];
     if (op) op.data.chatPreference = preference;
     _renderMembersList();
+    // If this player's chat is currently open, refresh overlay state
+    if (_activeChatId === id) _renderFriendChatMessages();
   });
 
   socket.on('friendRequestReceived', ({ fromId, fromName }) => {
@@ -102,6 +138,8 @@
     window.socialState.requests = window.socialState.requests.filter(r => r.fromId !== id);
     _renderFriendRequests();
     _renderMembersList();
+    // If this person's chat is open, re-evaluate the blocked overlay immediately
+    if (typeof _activeChatId !== 'undefined' && _activeChatId === id) _renderFriendChatMessages();
     showToast(name + ' is now your friend! 🎉');
   });
 
@@ -110,10 +148,72 @@
     if (f) { f.online = false; _renderMembersList(); }
   });
 
+  socket.on('friendRemoved', ({ id }) => {
+    window.socialState.friends = window.socialState.friends.filter(f => f.id !== id);
+    _renderMembersList();
+  });
+
+  // Mutual block: the other player blocked us — hide them
+  socket.on('youWereBlocked', ({ by }) => {
+    delete window._allPlayers[by];
+    window.gameScene?._removeOtherPlayer(by);
+    window.socialState.friends = window.socialState.friends.filter(f => f.id !== by);
+    _renderMembersList();
+  });
+
+  // ── Role events ───────────────────────────────────────────
+  socket.on('yourRole', ({ role }) => {
+    window.myRole = role;
+    // Show/hide privileged UI
+    document.getElementById('clear-tasks-btn')?.classList.toggle('hidden', role === 'regular');
+    if (role !== 'regular') window.socket?.emit('getBannedList');
+    window._refreshSpacesPanel?.();
+  });
+
+  socket.on('playerRoleUpdated', ({ id, role }) => {
+    if (window._allPlayers[id]) window._allPlayers[id].role = role;
+    _renderMembersList();
+  });
+
+  socket.on('playerStatusIconUpdated', ({ id, type }) => {
+    if (window._allPlayers[id]) window._allPlayers[id].statusIcon = type;
+    window.gameScene?._setOtherStatusIcon(id, type);
+  });
+
+  // ── Kicked / banned ────────────────────────────────────
+  socket.on('kicked', ({ reason }) => {
+    sessionStorage.clear();
+    alert(reason || 'You have been removed from this space.');
+    window.location.reload();
+  });
+
+  // ── Banned list ────────────────────────────────────────
+  socket.on('bannedListUpdated', ({ bannedList }) => {
+    _renderBannedList(bannedList);
+  });
+
+  // ── allTasksCleared ────────────────────────────────────
+  socket.on('allTasksCleared', () => {
+    window.TaskManager?.onAllTasksCleared?.();
+  });
+
+  // Chair occupancy events from server
+  socket.on('chairTaken', ({ chairId }) => { window._takenChairs.add(chairId); });
+  socket.on('chairFreed', ({ chairId }) => { window._takenChairs.delete(chairId); });
+  // Server rejected sit — auto-seat at nearest free sibling chair (same table)
+  socket.on('sitRejected', ({ chairId }) => {
+    window.gameScene?._tryAlternateSeat(chairId);
+  });
+
   socket.on('chatMessage', ({ fromId, fromName, message, isSelf }) => {
     if (window.gameScene?._isDeaf) return;
-    if (isSelf) return; // self messages shown in own chat bubble still (proximity)
-    window._routeChatToFriendPanel?.(fromId, fromName, message);
+    if (isSelf) {
+      // Show own sent message in our chat panel under the nearest other player
+      const nearestId = window.gameScene?._nearestOther?.data?.id;
+      if (nearestId) window._routeChatToPanel?.(nearestId, fromName, message, true);
+      return;
+    }
+    window._routeChatToPanel?.(fromId, fromName, message, false);
   });
 
   // ── Gender toggle ──────────────────────────────────────────
@@ -153,18 +253,22 @@
   function joinGame() {
     const name = nameInput.value.trim();
     if (!name) {
-      // Shake the input and show error — don't proceed
       const errEl = document.getElementById('name-error');
       if (errEl) errEl.textContent = 'Please enter a name!';
       nameInput.classList.remove('shake');
-      void nameInput.offsetWidth; // force reflow so animation restarts
+      void nameInput.offsetWidth;
       nameInput.classList.add('shake');
       nameInput.focus();
       return;
     }
-    // Clear any previous error
     const errEl = document.getElementById('name-error');
     if (errEl) errEl.textContent = '';
+
+    // Persist join info so refresh auto-rejoins
+    sessionStorage.setItem('studyspace_name',        name);
+    sessionStorage.setItem('studyspace_gender',      _selectedGender);
+    sessionStorage.setItem('studyspace_shirtColor',  _selectedShirtColor);
+
     // Stable client ID survives page refresh / socket reconnect
     let clientId = sessionStorage.getItem('studyspace_clientId');
     if (!clientId) {
@@ -178,27 +282,57 @@
 
     document.getElementById('player-name-display').textContent = name;
 
-    // Init player data
     window.PlayerClass.init(name, _selectedGender);
 
-    // Apply shirt colour before Phaser creates textures
     if (window.PixelSprites) {
       window.PixelSprites.setShirtColor(_selectedShirtColor);
     }
 
-    window.TaskManager.init(socket.id, name);
-    socket.emit('playerJoin', { name, gender: _selectedGender, shirtColor: _selectedShirtColor, clientId: window._clientId });
+    window.TaskManager.init(window._clientId, name);
+
+    // Restore last known position if available
+    const savedX = parseFloat(sessionStorage.getItem('studyspace_x') || '');
+    const savedY = parseFloat(sessionStorage.getItem('studyspace_y') || '');
+    const startX = isFinite(savedX) ? savedX : undefined;
+    const startY = isFinite(savedY) ? savedY : undefined;
+
+    socket.emit('playerJoin', { name, gender: _selectedGender, shirtColor: _selectedShirtColor, clientId: window._clientId, startX, startY });
 
     nameModal.classList.remove('active');
     nameModal.classList.add('hidden');
 
     startPhaser();
-
+    // Restore timer if it was running before the refresh
+    window.PomodoroManager?.restore();
+    // Show blocked list immediately from sessionStorage
+    _renderBlockedList();
   }
 
   joinBtn.addEventListener('click', () => { SoundManager.play('click'); joinGame(); });
   nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') joinGame(); });
-  nameInput.focus();
+
+  // ── Auto-rejoin on refresh ─────────────────────────────────
+  const savedName  = sessionStorage.getItem('studyspace_name');
+  const savedGender = sessionStorage.getItem('studyspace_gender');
+  const savedColor  = sessionStorage.getItem('studyspace_shirtColor');
+  if (savedName) {
+    // Restore UI selections silently, then join without showing modal
+    nameInput.value = savedName;
+    if (savedGender) {
+      _selectedGender = savedGender;
+      document.getElementById('gender-boy-btn')?.classList.toggle('active', savedGender === 'male');
+      document.getElementById('gender-girl-btn')?.classList.toggle('active', savedGender === 'female');
+    }
+    if (savedColor) {
+      _selectedShirtColor = savedColor;
+      document.querySelectorAll('.shirt-swatch').forEach(s => {
+        s.classList.toggle('active', s.dataset.color === savedColor);
+      });
+    }
+    joinGame();
+  } else {
+    nameInput.focus();
+  }
 
   // ── Phaser startup ─────────────────────────────────────────
   function startPhaser() {
@@ -240,6 +374,20 @@
         window.game.input.keyboard.addCapture([37, 38, 39, 40]); // ← ↑ → ↓
       }
     }
+  });
+
+  // ── Logout ─────────────────────────────────────────────────
+  document.getElementById('logout-btn')?.addEventListener('click', () => {
+    if (!confirm('Log out and return to the welcome screen?')) return;
+    window.socket?.disconnect();
+    sessionStorage.clear();
+    window.location.reload();
+  });
+
+  // ── Clear all shared tasks (creator/mod) ────────────────────
+  document.getElementById('clear-tasks-btn')?.addEventListener('click', () => {
+    if (!confirm('Clear ALL shared tasks? This cannot be undone.')) return;
+    window.socket?.emit('clearAllTasks');
   });
 
   // ── Pomodoro modal ─────────────────────────────────────────
@@ -604,13 +752,133 @@
 
   // Per-friend chat history: { [friendId]: [{from:'me'|'them', text, name}] }
   const _friendChats = {};
+  const _unread = {};   // unread message counts per player id
   let _activeChatId = null;
+
+  // ── Blocked players (client-side) ─────────────────────────
+  // Stored as Array<{id, name}> so we can show names in the blocked list
+  function _loadBlocked() {
+    try {
+      const raw = JSON.parse(sessionStorage.getItem('studyspace_blocked') || '[]');
+      // Upgrade from old format (array of id strings) to {id,name} objects
+      return raw.map(item => (typeof item === 'string' ? { id: item, name: item } : item));
+    } catch { return []; }
+  }
+  function _saveBlocked() {
+    try { sessionStorage.setItem('studyspace_blocked', JSON.stringify(_blockedIds)); } catch {}
+  }
+  const _blockedIds = _loadBlocked(); // Array<{id:string, name:string}>
+
+  function _blockPlayer(id, name) {
+    if (!_blockedIds.some(b => b.id === id)) {
+      _blockedIds.push({ id, name });
+      _saveBlocked();
+    }
+    window.socket?.emit('blockPlayer', { targetId: id });
+    delete window._allPlayers[id];
+    window.gameScene?._removeOtherPlayer(id);
+    if (_activeChatId === id) {
+      document.getElementById('friend-chat-section')?.classList.add('hidden');
+      _activeChatId = null;
+    }
+    _renderMembersList();
+    _renderBlockedList();
+    showToast(name + ' has been blocked.');
+  }
+
+  window._unblockPlayer = (id) => {
+    const entry = _blockedIds.find(b => b.id === id);
+    if (!entry) return;
+    _blockedIds.splice(_blockedIds.indexOf(entry), 1);
+    _saveBlocked();
+    // Tell server so both sides can see each other again
+    window.socket?.emit('unblockPlayer', { targetId: id });
+    _renderBlockedList();
+    showToast(entry.name + ' has been unblocked.');
+  };
+
+  // ── Member action menu ───────────��──────────────────────────
+  let _openMenuId = null;
+
+  window._memberMenuToggle = (id, name, isFriend, pref, targetRole) => {
+    if (_openMenuId === id) { _closeMenu(); return; }
+    _closeMenu();
+    _openMenuId = id;
+    const li = document.querySelector('.member-item[data-id="' + id + '"]');
+    if (!li) return;
+    const menu = document.createElement('div');
+    menu.className = 'member-menu';
+    menu.id = 'member-menu-' + id;
+    const si = escHtml(id), sn = escHtml(name);
+    const canBan = (window.myRole === 'creator' || window.myRole === 'mod') && targetRole !== 'creator';
+    let html = '';
+    if (isFriend) {
+      html += '<button onclick="window._memberMenuAction(\'removefriend\',\'' + si + '\',\'' + sn + '\')">✕ Remove Friend</button>';
+    } else if (pref !== 'private' && pref !== 'lockedin') {
+      html += '<button onclick="window._memberMenuAction(\'addfriend\',\'' + si + '\',\'' + sn + '\',\'' + pref + '\')">+ Add Friend</button>';
+    }
+    html += '<button onclick="window._memberMenuAction(\'block\',\'' + si + '\',\'' + sn + '\')">🚫 Block</button>';
+    html += '<button onclick="window._memberMenuAction(\'report\',\'' + si + '\',\'' + sn + '\')">🚩 Report</button>';
+    if (canBan) {
+      html += '<button class="danger-text" onclick="window._memberMenuAction(\'ban\',\'' + si + '\',\'' + sn + '\')">🔨 Ban</button>';
+    }
+    if (window.myRole === 'creator') {
+      if (targetRole === 'mod') {
+        html += '<button onclick="window._memberMenuAction(\'removemod\',\'' + si + '\',\'' + sn + '\')">Remove Mod</button>';
+      } else if (targetRole !== 'creator') {
+        html += '<button onclick="window._memberMenuAction(\'appointmod\',\'' + si + '\',\'' + sn + '\')">🛡 Make Mod</button>';
+      }
+    }
+    menu.innerHTML = html;
+    li.appendChild(menu);
+    setTimeout(() => document.addEventListener('click', _onOutsideMenuClick), 0);
+  };
+
+  function _onOutsideMenuClick(e) {
+    if (!e.target.closest('.member-menu') && !e.target.closest('.member-more-btn')) _closeMenu();
+  }
+  function _closeMenu() {
+    if (_openMenuId) {
+      document.getElementById('member-menu-' + _openMenuId)?.remove();
+      _openMenuId = null;
+      document.removeEventListener('click', _onOutsideMenuClick);
+    }
+  }
+
+  window._memberMenuAction = (action, id, name, pref) => {
+    _closeMenu();
+    if (action === 'removefriend') {
+      window.socialState.friends = window.socialState.friends.filter(f => f.id !== id);
+      window.socket?.emit('removeFriend', { friendId: id });
+      _renderMembersList();
+      showToast('Removed ' + name + ' as a friend.');
+    } else if (action === 'block') {
+      _blockPlayer(id, name);
+      window.socialState.friends = window.socialState.friends.filter(f => f.id !== id);
+      window.socket?.emit('removeFriend', { friendId: id });
+    } else if (action === 'report') {
+      showToast('🚩 Report submitted for ' + name + '. Thank you for keeping the space safe!');
+    } else if (action === 'addfriend') {
+      window._memberAddFriend(id, name, pref);
+    } else if (action === 'ban') {
+      if (confirm('Ban ' + name + '? They will be kicked and cannot rejoin.')) {
+        window.socket?.emit('banPlayer', { targetId: id });
+        showToast('🔨 ' + name + ' has been banned.');
+      }
+    } else if (action === 'appointmod') {
+      window.socket?.emit('appointMod', { targetId: id });
+      showToast('🛡 ' + name + ' is now a mod.');
+    } else if (action === 'removemod') {
+      window.socket?.emit('removeMod', { targetId: id });
+      showToast(name + ' is no longer a mod.');
+    }
+  };
 
   function _renderMembersList() {
     const list = document.getElementById('members-list');
     const countEl = document.getElementById('members-online-count');
     if (!list) return;
-    const allPlayers = Object.values(window._allPlayers || {});
+    const allPlayers = Object.values(window._allPlayers || {}).filter(p => !_blockedIds.some(b => b.id === p.id));
     if (countEl) countEl.textContent = allPlayers.length > 0 ? allPlayers.length : '';
     if (allPlayers.length === 0) {
       list.innerHTML = '<li class="members-empty">Just you here!<br/>Invite someone to study 🌸</li>';
@@ -626,19 +894,40 @@
     });
     list.innerHTML = sorted.map(p => {
       const pref = p.chatPreference || 'sociable';
+      const role = p.role || 'regular';
       const isFriend = friendIds.has(p.id);
       const safeId   = escHtml(p.id);
       const safeName = escHtml(p.name);
-      const actionBtn = isFriend
+      const unreadCount = _unread[p.id] || 0;
+      const unreadBadge = unreadCount > 0
+        ? '<span class="member-unread">' + (unreadCount > 9 ? '9+' : unreadCount) + '</span>'
+        : '';
+      const roleBadge = role === 'creator'
+        ? '<span class="role-badge-creator">👑 OWNER</span>'
+        : role === 'mod'
+          ? '<span class="role-badge-mod">🛡 MOD</span>'
+          : '';
+      const canChat = isFriend || pref === 'sociable';
+      const chatBtn = canChat
         ? '<button class="member-chat-btn" title="Open chat" onclick="window._openFriendChatById(\'' + safeId + '\',\'' + safeName + '\')">💬</button>'
         : '<button class="member-add-btn" title="Add friend" onclick="window._memberAddFriend(\'' + safeId + '\',\'' + safeName + '\',\'' + pref + '\')">+</button>';
-      return '<li class="member-item">' +
+      const moreBtn = '<button class="member-more-btn" title="More options" onclick="window._memberMenuToggle(\'' + safeId + '\',\'' + safeName + '\',' + isFriend + ',\'' + pref + '\',\'' + role + '\')">⋮</button>';
+      const callTitle = window.CallManager?.isInCall() ? 'Invite to call' : 'Call';
+      const callBtn = '<button class="member-call-btn" title="' + callTitle + '" onclick="window.CallManager?.startCall(\'' + safeId + '\',\'' + safeName + '\')">📞</button>';
+      return '<li class="member-item' + (isFriend ? ' member-is-friend' : '') + '" data-id="' + safeId + '">' +
         '<span class="member-dot ' + pref + '"></span>' +
-        (isFriend ? '<span class="member-star" title="Friend">★</span>' : '') +
+        roleBadge +
+        (isFriend && !roleBadge ? '<span class="member-friend-badge">FRIEND</span>' : '') +
         '<span class="member-name">' + safeName + '</span>' +
-        actionBtn +
+        unreadBadge +
+        callBtn +
+        chatBtn +
+        moreBtn +
       '</li>';
     }).join('');
+    // Also refresh the offline friends + blocked sections
+    _renderOfflineFriends();
+    _renderBlockedList();
   }
 
   window._memberAddFriend = (id, name, pref) => {
@@ -650,7 +939,150 @@
   };
 
   function _renderFriendsList() {
-    // No-op: friends are shown inside the members list
+    // Friends are shown inside the members list
+    _renderOfflineFriends();
+  }
+
+  function _renderOfflineFriends() {
+    const section = document.getElementById('offline-friends-section');
+    const list    = document.getElementById('offline-friends-list');
+    if (!section || !list) return;
+    const onlineIds = new Set(Object.keys(window._allPlayers || {}));
+    const offlineFriends = (window.socialState.friends || []).filter(f =>
+      !onlineIds.has(f.id) && !f.id.startsWith('npc-')
+    );
+    section.classList.toggle('hidden', offlineFriends.length === 0);
+    list.innerHTML = offlineFriends.map(f =>
+      '<li class="offline-friend-item">' +
+        '<span class="offline-dot"></span>' +
+        '<span class="offline-friend-name">' + escHtml(f.name) + '</span>' +
+        '<span class="offline-space-label">Derby\'s Space</span>' +
+      '</li>'
+    ).join('');
+  }
+
+  function _renderBlockedList() {
+    const section  = document.getElementById('blocked-section');
+    const list     = document.getElementById('blocked-list');
+    const countEl  = document.querySelector('#blocked-section .blocked-count');
+    if (!section || !list) return;
+    section.classList.toggle('hidden', _blockedIds.length === 0);
+    if (countEl) countEl.textContent = _blockedIds.length > 0 ? '(' + _blockedIds.length + ')' : '';
+    list.innerHTML = _blockedIds.map(b =>
+      '<li class="blocked-item">' +
+        '<span class="blocked-name">🚫 ' + escHtml(b.name) + '</span>' +
+        '<button class="pixel-btn small unblock-btn" onclick="window._unblockPlayer(\'' + escHtml(b.id) + '\')">Unblock</button>' +
+      '</li>'
+    ).join('');
+  }
+
+  function _renderBannedList(bannedList) {
+    const section = document.getElementById('banned-section');
+    const list    = document.getElementById('banned-list');
+    const countEl = document.querySelector('#banned-section .banned-count');
+    if (!section || !list) return;
+    const isPrivileged = window.myRole === 'creator' || window.myRole === 'mod';
+    section.classList.toggle('hidden', !isPrivileged || !bannedList || bannedList.length === 0);
+    if (countEl) countEl.textContent = bannedList?.length > 0 ? '(' + bannedList.length + ')' : '';
+    if (!bannedList) return;
+    list.innerHTML = bannedList.map(b =>
+      '<li class="banned-item">' +
+        '<span class="banned-name">🔨 ' + escHtml(b.name) + '</span>' +
+        (window.myRole === 'creator'
+          ? '<button class="pixel-btn small unban-btn" onclick="window._unbanPlayer(\'' + escHtml(b.clientId) + '\')">Unban</button>'
+          : '') +
+      '</li>'
+    ).join('');
+  }
+
+  window._unbanPlayer = (clientId) => {
+    window.socket?.emit('unbanPlayer', { clientId });
+  };
+
+  window._renderOfflineFriends = _renderOfflineFriends;
+  window._renderBlockedList    = _renderBlockedList;
+  window._renderBannedList     = _renderBannedList;
+
+  // ── Spaces panel functions ─────────────────────────────────
+  function _updateSpacePanel(status) {
+    window._spaceStatus = status;
+    // live dot
+    const dot = document.getElementById('space-live-dot');
+    if (dot) { dot.className = 'space-dot ' + (status.live ? 'live' : 'offline'); }
+    // viewer count
+    const vc = document.getElementById('space-viewer-count');
+    if (vc) { vc.textContent = status.live ? '👁 ' + status.viewerCount : ''; vc.classList.toggle('hidden', !status.live); }
+    // stream info
+    const info = document.getElementById('space-stream-info');
+    const title = document.getElementById('space-stream-title');
+    const game  = document.getElementById('space-game-name');
+    if (info) { info.classList.toggle('hidden', !status.live || !status.streamTitle); }
+    if (title && status.streamTitle) title.textContent = status.streamTitle;
+    if (game  && status.gameName)   game.textContent  = '🎮 ' + status.gameName;
+    // watch link
+    const link = document.getElementById('space-twitch-link');
+    if (link) {
+      link.classList.toggle('hidden', !status.twitchLogin);
+      if (status.twitchLogin) link.href = 'https://twitch.tv/' + status.twitchLogin;
+    }
+    // live status dot in header (show small live indicator next to logo)
+    let liveBadge = document.getElementById('header-live-badge');
+    if (status.live) {
+      if (!liveBadge) {
+        liveBadge = document.createElement('span');
+        liveBadge.id = 'header-live-badge';
+        liveBadge.className = 'header-live-badge';
+        liveBadge.textContent = '🔴 LIVE';
+        document.getElementById('header-left')?.appendChild(liveBadge);
+      }
+    } else {
+      liveBadge?.remove();
+    }
+  }
+  window._updateSpacePanel = _updateSpacePanel;
+
+  function _refreshSpacesPanel() {
+    fetch('/api/twitch/config').then(r => r.json()).then(cfg => {
+      // Show twitch connect section only to creator
+      const section = document.getElementById('twitch-connect-section');
+      if (section) section.classList.toggle('hidden', window.myRole !== 'creator');
+      const connectedInfo = document.getElementById('twitch-connected-info');
+      const notConnected  = document.getElementById('twitch-not-connected');
+      const connectedName = document.getElementById('twitch-connected-name');
+      if (cfg.connected) {
+        connectedInfo?.classList.remove('hidden');
+        notConnected?.classList.add('hidden');
+        if (connectedName) connectedName.textContent = cfg.twitchUser || '';
+      } else {
+        connectedInfo?.classList.add('hidden');
+        notConnected?.classList.remove('hidden');
+      }
+      // Show "connect" only if clientId is configured
+      const connectLink = document.querySelector('.twitch-connect-btn');
+      if (connectLink) connectLink.style.display = cfg.configured ? '' : 'none';
+      const hint = document.querySelector('.twitch-hint');
+      if (hint) hint.textContent = cfg.configured ? 'Connect Twitch to show live status' : 'Set up data/twitch-config.json first';
+    }).catch(() => {});
+    if (window._spaceStatus) _updateSpacePanel(window._spaceStatus);
+  }
+  window._refreshSpacesPanel = _refreshSpacesPanel;
+
+  // ── Call invite populate ───────────────────────────────────
+  function _populateCallInviteDropdown() {
+    const dd = document.getElementById('call-invite-dropdown');
+    if (!dd) return;
+    const peerIds = new Set(window.CallManager?.getPeerIds() || []);
+    const available = Object.values(window._allPlayers || {}).filter(p => !peerIds.has(p.id));
+    if (available.length === 0) {
+      dd.innerHTML = '<div class="call-invite-empty">No one else online</div>';
+      return;
+    }
+    dd.innerHTML = available.map(p =>
+      '<div class="call-invite-item" onclick="window.CallManager?.startCall(\'' + escHtml(p.id) + '\',\'' + escHtml(p.name) + '\'); document.getElementById(\'call-invite-dropdown\')?.classList.add(\'hidden\')">' +
+      '<span class="call-invite-item-name">' + escHtml(p.name) + '</span>' +
+      '<span class="pixel-btn small" style="font-size:6px;pointer-events:none">Invite</span>' +
+      '</div>'
+    ).join('');
   }
 
   function _renderFriendRequests() {
@@ -694,20 +1126,64 @@
 
   // ── Friend chat ────────────────────────────────────────────
 
+  function _chatTargetStatus(id) {
+    // Returns 'ok' | 'private' | 'lockedin-info'
+    // 'lockedin-info' = show a soft banner but input still enabled
+    if (!id || id.startsWith('npc-')) return 'ok';
+    const pref = window._allPlayers[id]?.chatPreference;
+    if (pref === 'lockedin') return 'lockedin-info';
+    const isFriend = window.socialState.friends.some(f => f.id === id);
+    if (pref === 'private' && !isFriend) return 'private';
+    return 'ok';
+  }
+
   function _openFriendChat(friendId, friendName) {
+    const status = _chatTargetStatus(friendId);
+    if (status === 'private') {
+      showToast(friendName + ' is private! Add them as a friend to chat.');
+      return;
+    }
     _activeChatId = friendId;
+    delete _unread[friendId];
     if (!_friendChats[friendId]) _friendChats[friendId] = [];
     const section = document.getElementById('friend-chat-section');
     const nameEl  = document.getElementById('friend-chat-name');
     if (section) section.classList.remove('hidden');
     if (nameEl)  nameEl.textContent = friendName;
     _renderFriendChatMessages();
+    _renderMembersList();
     document.getElementById('friend-chat-input')?.focus();
   }
 
   function _renderFriendChatMessages() {
-    const el = document.getElementById('friend-chat-messages');
+    const el      = document.getElementById('friend-chat-messages');
+    const input   = document.getElementById('friend-chat-input');
+    const overlay = document.getElementById('chat-blocked-overlay');
     if (!el || !_activeChatId) return;
+
+    const status = _chatTargetStatus(_activeChatId);
+    const targetName = escHtml(window._allPlayers[_activeChatId]?.name || '');
+
+    // Show/hide blocked overlay
+    if (overlay) {
+      if (status === 'lockedin-info') {
+        overlay.className = 'chat-blocked-overlay chat-locked-info';
+        overlay.innerHTML = '⏳ <strong>' + targetName + '</strong> is in focus mode — your messages will be delivered when they\'re back!';
+        overlay.classList.remove('hidden');
+      } else if (status === 'private') {
+        overlay.className = 'chat-blocked-overlay';
+        overlay.innerHTML = '🔒 <strong>' + targetName + '</strong> is set to private.<br/>Add them as a friend to chat.';
+        overlay.classList.remove('hidden');
+      } else {
+        overlay.className = 'chat-blocked-overlay hidden';
+      }
+    }
+    if (input) {
+      // Only hard-disable for private. Locked-in just shows a soft banner.
+      input.disabled = status === 'private';
+      input.placeholder = status === 'private' ? 'Chat disabled — private mode' : 'Message…';
+    }
+
     const msgs = _friendChats[_activeChatId] || [];
     el.innerHTML = msgs.map(m =>
       '<div class="chat-msg ' + (m.from === 'me' ? 'chat-msg-me' : 'chat-msg-them') + '">' +
@@ -719,20 +1195,18 @@
 
   function _sendFriendChat() {
     const input = document.getElementById('friend-chat-input');
-    if (!input || !_activeChatId) return;
+    if (!input || !_activeChatId || input.disabled) return;
     const text = input.value.trim();
     if (!text) return;
+
+    // Blocked by private mode → input is already disabled above
+    // Locked-in → allowed; server queues and delivers later
     if (!_friendChats[_activeChatId]) _friendChats[_activeChatId] = [];
     _friendChats[_activeChatId].push({ from: 'me', text });
     input.value = '';
     _renderFriendChatMessages();
     if (!_activeChatId.startsWith('npc-')) {
       window.socket?.emit('directMessage', { toId: _activeChatId, message: text });
-      const targetPref = window._allPlayers[_activeChatId]?.chatPreference;
-      if (targetPref === 'lockedin') {
-        const targetName = window._allPlayers[_activeChatId]?.name || 'They';
-        showToast(targetName + ' is locked in to focus mode! Your message will be sent when they are out of focus mode.');
-      }
     }
   }
 
@@ -770,16 +1244,106 @@
     const btn = document.getElementById('mic-btn');
     btn.textContent = window.gameScene._isMuted ? '🔇' : '🎤';
     btn.classList.toggle('muted', window.gameScene._isMuted);
+    window.CallManager?.toggleMute();
   });
 
   document.getElementById('listen-btn')?.addEventListener('click', () => {
-    SoundManager.play('click');
+    SoundManager.play('click'); // play click before muting
     if (!window.gameScene) return;
     window.gameScene._isDeaf = !window.gameScene._isDeaf;
+    const deaf = window.gameScene._isDeaf;
     const btn = document.getElementById('listen-btn');
-    btn.textContent = window.gameScene._isDeaf ? '🔕' : '🔊';
-    btn.classList.toggle('deafened', window.gameScene._isDeaf);
+    btn.textContent = deaf ? '🔕' : '🔊';
+    btn.title = deaf ? 'Undeafen' : 'Deafen';
+    btn.classList.toggle('deafened', deaf);
+    // Silence all game audio (sounds + call streams)
+    SoundManager.setDeafened(deaf);
+    window.CallManager?.setDeafened(deaf);
   });
+
+  // ── Call panel UI wiring ───────────────────────────────────
+  document.getElementById('call-accept-btn')?.addEventListener('click', () => {
+    SoundManager.play('click');
+    const el = document.getElementById('incoming-call');
+    if (!el) return;
+    window.CallManager?.acceptCall(el.dataset.callId);
+  });
+
+  document.getElementById('call-decline-btn')?.addEventListener('click', () => {
+    SoundManager.play('click');
+    const el = document.getElementById('incoming-call');
+    if (!el) return;
+    window.CallManager?.declineCall(el.dataset.callId);
+  });
+
+  document.getElementById('call-mute-btn')?.addEventListener('click', () => {
+    SoundManager.play('click');
+    window.CallManager?.toggleMute();
+  });
+
+  document.getElementById('call-video-btn')?.addEventListener('click', () => {
+    SoundManager.play('click');
+    window.CallManager?.toggleVideo();
+  });
+
+  document.getElementById('call-leave-btn')?.addEventListener('click', () => {
+    SoundManager.play('click');
+    window.CallManager?.leaveCall();
+  });
+
+  // ── Spaces panel ───────────────────────────────────────────
+  document.getElementById('spaces-btn')?.addEventListener('click', () => {
+    SoundManager.play('click');
+    const panel = document.getElementById('spaces-panel');
+    if (!panel) return;
+    panel.classList.toggle('hidden');
+    if (!panel.classList.contains('hidden')) window._refreshSpacesPanel?.();
+  });
+  document.getElementById('spaces-panel-close')?.addEventListener('click', () => {
+    document.getElementById('spaces-panel')?.classList.add('hidden');
+  });
+  document.getElementById('space-copy-link-btn')?.addEventListener('click', () => {
+    navigator.clipboard?.writeText(location.origin).then(() => showToast('🔗 Link copied!'));
+  });
+  document.getElementById('twitch-disconnect-btn')?.addEventListener('click', () => {
+    fetch('/auth/twitch/disconnect', { method: 'POST' })
+      .then(() => { showToast('Twitch disconnected'); window._refreshSpacesPanel?.(); });
+  });
+
+  // ── Call invite dropdown ────────────────────────────────────
+  document.getElementById('call-invite-btn')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    SoundManager.play('click');
+    const dd = document.getElementById('call-invite-dropdown');
+    if (!dd) return;
+    const hidden = dd.classList.toggle('hidden');
+    if (!hidden) _populateCallInviteDropdown();
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#call-invite-section')) {
+      document.getElementById('call-invite-dropdown')?.classList.add('hidden');
+    }
+  });
+
+  // Handle Twitch OAuth redirect params
+  const _urlParams = new URLSearchParams(location.search);
+  if (_urlParams.has('twitch')) {
+    const twitchResult = _urlParams.get('twitch');
+    if (twitchResult === 'connected') showToast('🟣 Twitch connected successfully!');
+    else if (twitchResult === 'error') showToast('❌ Twitch connection failed. Check your config.');
+    // Clean URL
+    history.replaceState({}, '', '/');
+  }
+
+  function _setLockedInOverlay(on) {
+    const overlay  = document.getElementById('lockedin-overlay');
+    const chatSect = document.getElementById('friend-chat-section');
+    if (!overlay) return;
+    overlay.classList.toggle('hidden', !on);
+    // Also close open chat panel — locked-in players can't read chats
+    if (on && chatSect) { chatSect.classList.add('hidden'); }
+  }
 
   document.querySelectorAll('.pref-pill').forEach(pill => {
     pill.addEventListener('click', () => {
@@ -789,6 +1353,7 @@
       const pref = pill.dataset.pref;
       if (window.gameScene) window.gameScene._chatPreference = pref;
       window.socket?.emit('updatePreference', { preference: pref });
+      _setLockedInOverlay(pref === 'lockedin');
     });
   });
 
@@ -821,11 +1386,28 @@
     _activeChatId = null;
   });
 
-  // Route incoming socket chat messages to friend chat panel
-  window._routeChatToFriendPanel = (fromId, fromName, message) => {
+  // Route incoming chat messages to the panel (proximity or DM)
+  window._routeChatToPanel = (fromId, fromName, message, isSelf) => {
     if (!_friendChats[fromId]) _friendChats[fromId] = [];
-    _friendChats[fromId].push({ from: 'them', text: message });
-    if (_activeChatId === fromId) _renderFriendChatMessages();
-    else showToast(fromName + ': ' + message.substring(0, 28) + (message.length > 28 ? '…' : ''));
+    _friendChats[fromId].push({ from: isSelf ? 'me' : 'them', text: message, name: fromName });
+    if (_activeChatId === fromId) {
+      _renderFriendChatMessages();
+    } else {
+      if (!isSelf) {
+        _unread[fromId] = (_unread[fromId] || 0) + 1;
+        _renderMembersList();
+        // Toast notification so it's visible even with the panel closed
+        const preview = message.length > 40 ? message.slice(0, 40) + '…' : message;
+        showToast('💬 ' + escHtml(fromName) + ': ' + escHtml(preview));
+      }
+    }
   };
+  // Keep old name for any legacy callers
+  window._routeChatToFriendPanel = (fromId, fromName, message) => window._routeChatToPanel(fromId, fromName, message, false);
+
+  // Clicking the game canvas blurs the chat input so movement keys work immediately
+  document.getElementById('game-container')?.addEventListener('pointerdown', () => {
+    const ae = document.activeElement;
+    if (ae && (ae.id === 'friend-chat-input' || ae.id === 'chat-text-input')) ae.blur();
+  });
 })();

@@ -20,6 +20,31 @@
   let _pendingSkipCallback = null;
   let _currentPomoNum = 0;   // which pomo number is currently active (1-based)
 
+  const SS_KEY = 'studyspace_timer';
+
+  function _saveState() {
+    try {
+      sessionStorage.setItem(SS_KEY, JSON.stringify({
+        secondsLeft:    _secondsLeft,
+        isBreak:        _isBreak,
+        focusSec:       _focusSec,
+        breakSec:       _breakSec,
+        isPaused:       _isPaused,
+        pomosTarget:    _pomosTarget,
+        pomosLeft:      _pomosLeft,
+        autoNext:       _autoNext,
+        focusMinutes:   _focusMinutes,
+        currentPomoNum: _currentPomoNum,
+        running:        _intervalId !== null && !_isPaused,
+        savedAt:        Date.now(),
+      }));
+    } catch (e) {}
+  }
+
+  function _clearSavedState() {
+    try { sessionStorage.removeItem(SS_KEY); } catch (e) {}
+  }
+
   const timerBar   = () => document.getElementById('timer-bar');
   const modeLabel  = () => document.getElementById('timer-mode-label');
   const countdown  = () => document.getElementById('timer-countdown');
@@ -120,6 +145,7 @@
     if (_isPaused) return;
     _secondsLeft -= 1;
     if (countdown()) countdown().textContent = fmt(_secondsLeft);
+    _saveState();
 
     if (_secondsLeft <= 0) {
       clearInterval(_intervalId);
@@ -157,6 +183,7 @@
             SoundManager.play('cheer');
             _bigConfetti();
             _showPomoFinishModal('ALL DONE! 🎉', 'Amazing session! You crushed it!', coinsEarned);
+            _clearSavedState();
             _setDefault();
             if (window.gameScene) window.gameScene.standUpAfterTimer();
           }
@@ -214,6 +241,7 @@
           SoundManager.play('cheer');
           _bigConfetti();
           _showPomoFinishModal('ALL DONE! 🎉', 'Session complete! You nailed it!', 0);
+          _clearSavedState();
           _setDefault();
           if (window.gameScene) window.gameScene.standUpAfterTimer();
         }
@@ -371,6 +399,7 @@
       _isPaused = true;
       if (window.gameScene) window.gameScene.setStatusIcon('pause');
       _updatePauseResumeButtons();
+      _saveState();
     },
 
     resume() {
@@ -380,6 +409,7 @@
       // Restore correct status icon
       if (window.gameScene) window.gameScene.setStatusIcon(_isBreak ? 'break' : 'focus');
       _updatePauseResumeButtons();
+      _saveState();
     },
 
     // Shows confirmation popup; actual stop happens in confirmStop()
@@ -411,6 +441,7 @@
       _intervalId = null;
       _isPaused   = false;
       _isBreak    = false;
+      _clearSavedState();
       _setDefault();
       if (_pendingStopCallback) { _pendingStopCallback(); _pendingStopCallback = null; }
     },
@@ -428,6 +459,7 @@
       _intervalId = null;
       _isPaused   = false;
       _isBreak    = false;
+      _clearSavedState();
       _setDefault();
     },
 
@@ -488,6 +520,59 @@
     },
 
     hideFinishModal() { _hidePomoFinishModal(); },
+
+    // Restore timer state after a page refresh
+    restore() {
+      try {
+        const raw = sessionStorage.getItem(SS_KEY);
+        if (!raw) return;
+        const s = JSON.parse(raw);
+        if (!s || (!s.running && !s.isPaused)) return; // nothing was running
+
+        _focusMinutes   = s.focusMinutes;
+        _focusSec       = s.focusSec;
+        _breakSec       = s.breakSec;
+        _autoNext       = s.autoNext;
+        _pomosTarget    = s.pomosTarget;
+        _pomosLeft      = s.pomosLeft;
+        _currentPomoNum = s.currentPomoNum;
+        _isBreak        = s.isBreak;
+
+        if (s.running && !s.isPaused) {
+          // Timer was ticking — subtract elapsed time
+          const elapsedSec = Math.floor((Date.now() - s.savedAt) / 1000);
+          _secondsLeft = Math.max(0, s.secondsLeft - elapsedSec);
+        } else {
+          // Was paused
+          _secondsLeft = s.secondsLeft;
+        }
+
+        // Restore UI
+        const tb = timerBar();
+        if (_isBreak) {
+          if (tb) { tb.classList.add('break-mode'); tb.classList.remove('paused-mode'); }
+          if (modeLabel()) modeLabel().textContent = 'BREAK';
+          if (statusEl()) { statusEl().textContent = '● BREAK'; statusEl().className = 'status-break'; }
+        } else {
+          if (tb) tb.classList.remove('break-mode', 'paused-mode');
+          if (modeLabel()) modeLabel().textContent = 'FOCUS';
+          if (statusEl()) { statusEl().textContent = '● STUDYING'; statusEl().className = 'status-studying'; }
+        }
+        if (countdown()) countdown().textContent = fmt(_secondsLeft);
+        _updatePomoCounter(true);
+
+        if (s.isPaused || _secondsLeft <= 0) {
+          _isPaused = true;
+          if (statusEl()) { statusEl().textContent = '● PAUSED'; }
+          if (tb) tb.classList.add('paused-mode');
+          _updatePauseResumeButtons();
+        } else {
+          _isPaused = false;
+          _intervalId = setInterval(tick, 1000);
+          _updatePauseResumeButtons();
+        }
+      } catch (e) { console.warn('Timer restore failed:', e); }
+    },
 
     isRunning() {
       return _intervalId !== null || _isPaused;

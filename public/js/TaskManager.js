@@ -180,12 +180,22 @@
       }
     }
 
+    _savePersonal();
     renderPersonal();
   }
 
   function deletePersonal(id) {
     _personalTasks = _personalTasks.filter((x) => x.id !== id);
+    _savePersonal();
     renderPersonal();
+  }
+
+  // ── sessionStorage helpers ─────────────────────────────────
+  function _savePersonal() {
+    try { sessionStorage.setItem('studyspace_tasks', JSON.stringify(_personalTasks)); } catch (e) {}
+  }
+  function _loadPersonal() {
+    try { return JSON.parse(sessionStorage.getItem('studyspace_tasks') || '[]'); } catch (e) { return []; }
   }
 
   // ── Public API ──────────────────────────────────────────────
@@ -193,12 +203,16 @@
     init(playerId, playerName) {
       _myPlayerId = playerId;
       _myName     = playerName;
+      // Restore personal tasks from sessionStorage
+      _personalTasks = _loadPersonal();
+      renderPersonal();
     },
 
     addTask(text) {
       if (!text.trim()) return;
       const localId = `local-${Date.now()}`;
       _personalTasks.push({ id: localId, text: text.trim(), completed: false, coinsEarned: 0 });
+      _savePersonal();
       renderPersonal();
       window.socket.emit('addTask', { text: text.trim(), playerName: _myName });
     },
@@ -207,6 +221,22 @@
 
     onInit(tasks) {
       _globalTasks = tasks;
+
+      // Reconcile: for each of my global tasks, ensure personal list has a matching entry
+      // (handles the case where sessionStorage was cleared but server still has our tasks)
+      const myGlobal = _globalTasks.filter(t => t.playerId === _myPlayerId);
+      myGlobal.forEach(gt => {
+        const exists = _personalTasks.find(p => p.text === gt.text);
+        if (!exists) {
+          _personalTasks.push({ id: `local-${Date.now()}-${Math.random()}`, text: gt.text, completed: gt.completed, coinsEarned: gt.completed ? 10 : 0 });
+        } else if (gt.completed && !exists.completed) {
+          // Sync completed state from server
+          exists.completed = true;
+          exists.coinsEarned = exists.coinsEarned || 10;
+        }
+      });
+      _savePersonal();
+      renderPersonal();
       renderGlobal();
     },
 
@@ -234,6 +264,7 @@
             if (window.SoundManager) SoundManager.play('complete');
             _taskConfetti();
             _showTaskDoneModal(coins);
+            _savePersonal();
             renderPersonal();
           }
         }
@@ -257,6 +288,7 @@
             if (window.PlayerClass && coinsBack > 0) {
               window.PlayerClass.addCoins(-coinsBack);
             }
+            _savePersonal();
             renderPersonal();
           }
         }
@@ -266,6 +298,11 @@
 
     onTaskDeleted({ taskId }) {
       _globalTasks = _globalTasks.filter((t) => t.id !== taskId);
+      renderGlobal();
+    },
+
+    onAllTasksCleared() {
+      _globalTasks = [];
       renderGlobal();
     },
   };

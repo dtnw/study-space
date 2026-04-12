@@ -151,6 +151,7 @@ class GameScene extends Phaser.Scene {
     this.game.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
     this._loadDIYLayout();
+    this._buildChairGroups(); // must run AFTER layout is loaded
 
     // ── T key → proximity chat (sociable players only) ──────
     const tKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.T, false);
@@ -176,6 +177,12 @@ class GameScene extends Phaser.Scene {
     // Flush any players that arrived before the scene was ready
     (window._pendingPlayers || []).forEach(p => this._spawnOtherPlayer(p));
     window._pendingPlayers = [];
+
+    // Restore saved position if server confirmed it
+    if (window._pendingSpawn) {
+      this.player.setPosition(window._pendingSpawn.x, window._pendingSpawn.y);
+      window._pendingSpawn = null;
+    }
   }
 
   update() {
@@ -197,6 +204,13 @@ class GameScene extends Phaser.Scene {
     if (this._selfChatBubble && this._selfChatBubble.active) {
       this._selfChatBubble.setPosition(this.player.x, this.player.y - 72).setDepth(this.player.y + 40);
     }
+    // Bob other players' status icons in sync with own icon
+    const bob = Math.sin(this.time.now / 300) * 2;
+    Object.values(this.otherPlayers).forEach(op => {
+      if (op.statusIcon?.visible) {
+        op.statusIcon.setPosition(op.data.x, op.data.y - 54 + bob).setDepth(op.data.y + 30);
+      }
+    });
   }
 
   // ── Animations ───────────────────────────────────────────────────────────
@@ -444,29 +458,29 @@ class GameScene extends Phaser.Scene {
     this.nameTag = this.add.text(0, 0, name, {
       fontFamily: '"Press Start 2P", monospace',
       fontSize: '7px',
-      color: '#ffffff',
+      color: '#ffe8ff',
       stroke: '#000000',
       strokeThickness: 3,
-      backgroundColor: '#1a0b2e',
+      backgroundColor: '#2a1040cc',
       padding: { x: 4, y: 2 },
-    }).setOrigin(0.5, 1).setVisible(false);
+    }).setOrigin(0.5, 1).setVisible(true); // own name always visible
 
+    // Permanent faint glow to show which avatar is YOU
+    this._selfGlow = this.add.graphics();
+    this._selfGlow.lineStyle(2, 0xcc88ff, 0.55);
+    this._selfGlow.strokeRect(-19, -49, 38, 50);
+
+    // Brighter highlight on hover (on top of the permanent glow)
     this.hoverHighlight = this.add.graphics().setVisible(false);
-    this.hoverHighlight.lineStyle(2, 0x9B6BDB, 1);
-    this.hoverHighlight.strokeRect(-18, -48, 36, 48);
+    this.hoverHighlight.lineStyle(2, 0xffffff, 0.9);
+    this.hoverHighlight.strokeRect(-19, -49, 38, 50);
 
     this.player.setInteractive(
       new Phaser.Geom.Rectangle(-18, -48, 36, 48),
       Phaser.Geom.Rectangle.Contains
     );
-    this.player.on('pointerover',  () => {
-      this.nameTag.setVisible(true);
-      this.hoverHighlight.setVisible(true);
-    });
-    this.player.on('pointerout',   () => {
-      this.nameTag.setVisible(false);
-      this.hoverHighlight.setVisible(false);
-    });
+    this.player.on('pointerover',  () => { this.hoverHighlight.setVisible(true);  });
+    this.player.on('pointerout',   () => { this.hoverHighlight.setVisible(false); });
 
     this.statusIcon = this.add.image(0, 0, 'icon_book')
       .setVisible(false).setOrigin(0.5, 1);
@@ -542,6 +556,7 @@ class GameScene extends Phaser.Scene {
     const py = this.player.y;
     this.nameTag.setPosition(px, py - 52);
     this.nameTag.setDepth(this.player.y + 35);
+    this._selfGlow.setPosition(px, py).setDepth(this.player.y - 1);
     this.hoverHighlight.setPosition(px, py);
     this.hoverHighlight.setDepth(this.player.y - 1);
   }
@@ -553,7 +568,21 @@ class GameScene extends Phaser.Scene {
     this.statusIcon.setDepth(this.player.y + 30);
   }
 
-  // Show/hide status icon above player's head
+  // Map icon type string → texture key (shared by own + other players)
+  static _iconTexKey(type) {
+    if (type === 'focus')        return 'icon_book';
+    if (type === 'break')        return 'icon_coffee';
+    if (type === 'pause')        return 'icon_pause';
+    if (type === 'eating')       return 'icon_fork';
+    if (type === 'cooking')      return 'icon_fire';
+    if (type === 'relax')        return 'icon_relax';
+    if (type === 'laundry')      return 'icon_laundry';
+    if (type === 'coffee')       return 'icon_coffee';
+    if (type === 'workout')      return 'icon_fire';
+    return 'icon_book';
+  }
+
+  // Show/hide status icon above own player's head; broadcasts change to others
   setStatusIcon(type) {
     if (!this.statusIcon) return;
     if (this._iconTween) { this._iconTween.stop(); this._iconTween = null; }
@@ -561,22 +590,23 @@ class GameScene extends Phaser.Scene {
 
     if (!type) {
       this.statusIcon.setVisible(false);
-      return;
+    } else {
+      this.statusIcon.setTexture(GameScene._iconTexKey(type)).setVisible(true);
     }
 
-    let texKey;
-    if (type === 'focus')        texKey = 'icon_book';
-    else if (type === 'break')   texKey = 'icon_coffee';
-    else if (type === 'pause')   texKey = 'icon_pause';
-    else if (type === 'eating')  texKey = 'icon_fork';
-    else if (type === 'cooking') texKey = 'icon_fire';
-    else if (type === 'relax')   texKey = 'icon_relax';
-    else if (type === 'laundry') texKey = 'icon_laundry';
-    else if (type === 'coffee')  texKey = 'icon_coffee';
-    else if (type === 'workout') texKey = 'icon_fire';
-    else                         texKey = 'icon_book';
+    // Tell other players about the change
+    window.socket?.emit('playerStatusIcon', { type: type || null });
+  }
 
-    this.statusIcon.setTexture(texKey).setVisible(true);
+  // Update another player's floating status icon
+  _setOtherStatusIcon(id, type) {
+    const op = this.otherPlayers[id];
+    if (!op || !op.statusIcon) return;
+    if (!type) {
+      op.statusIcon.setVisible(false);
+    } else {
+      op.statusIcon.setTexture(GameScene._iconTexKey(type)).setVisible(true);
+    }
   }
 
   // ── Chair proximity ───────────────────────────────────────────────────────
@@ -591,7 +621,9 @@ class GameScene extends Phaser.Scene {
     let nearest = null, nearestDist = Infinity;
     this.chairs.forEach((chair) => {
       if (chair.occupied) return;
-      // Block if another player is sitting at this chair position
+      // Block if server knows this chair is taken (even by blocked/invisible players)
+      if (window._takenChairs?.has(chair.id)) return;
+      // Block if another visible player is sitting at this chair position
       if (otherPos.some(p => Phaser.Math.Distance.Between(p.x, p.y, chair.seatX, chair.seatY) < 25)) return;
       const d = Phaser.Math.Distance.Between(
         this.player.x, this.player.y,
@@ -709,11 +741,64 @@ class GameScene extends Phaser.Scene {
     if (this.isSitting)                                 { this.standUp();         return; }
   }
 
+  // Build a map: chairId → array of sibling chairIds (same furniture piece)
+  _buildChairGroups() {
+    this._chairGroup = {}; // chairId → [chairId, ...]
+    (this.diyObjects || []).forEach(obj => {
+      if (!obj.chairIds || obj.chairIds.length === 0) return;
+      obj.chairIds.forEach(id => { this._chairGroup[id] = obj.chairIds; });
+    });
+  }
+
+  // Silently undo a sit (no sound, no tween) — used when server rejects
+  _cancelSit() {
+    if (!this.isSitting) return;
+    if (this.currentChair) {
+      window.socket?.emit('standUp', { chairId: this.currentChair.id });
+      this.currentChair.occupied = false;
+    }
+    this.isSitting    = false;
+    this.currentChair = null;
+    this.tweens.killTweensOf(this.player);
+    this.player.body.moves  = true;
+    this.player.body.enable = true;
+    this.player.body.reset(this.player.x, this.player.y + 30);
+    this.player.setTexture(`player_${this._gender}_down_0`);
+    this.player.setFlipX(false);
+    this._updatePrompts();
+    // Close any sitting modal that may have opened before rejection arrived
+    ['pomodoro-modal', 'eat-modal', 'relax-modal'].forEach(id => {
+      const m = document.getElementById(id);
+      if (m) { m.classList.add('hidden'); m.classList.remove('active'); }
+    });
+  }
+
+  // Try to auto-sit at the nearest free sibling chair (same table)
+  _tryAlternateSeat(rejectedChairId) {
+    this._cancelSit();
+    if (!this._chairGroup) return;
+    const siblings = (this._chairGroup[rejectedChairId] || [])
+      .filter(id => id !== rejectedChairId);
+    const free = siblings
+      .map(id => this.chairs.find(c => c.id === id))
+      .filter(c => c && !c.occupied && !window._takenChairs?.has(c.id))
+      .sort((a, b) => {
+        const da = Phaser.Math.Distance.Between(this.player.x, this.player.y, a.seatX, a.seatY);
+        const db = Phaser.Math.Distance.Between(this.player.x, this.player.y, b.seatX, b.seatY);
+        return da - db;
+      });
+    if (free.length) this._sitDown(free[0]);
+    // else: silently do nothing
+  }
+
   _sitDown(chair) {
     if (chair.occupied) return;
+    // Also reject if server knows another player (possibly blocked/invisible) holds this seat
+    if (window._takenChairs?.has(chair.id)) return;
     chair.occupied    = true;
     this.isSitting    = true;
     this.currentChair = chair;
+    window.socket?.emit('sitDown', { chairId: chair.id });
 
     SoundManager.play('sit');
     this.player.body.setVelocity(0, 0);
@@ -796,7 +881,10 @@ class GameScene extends Phaser.Scene {
     const side = this.currentChair ? this.currentChair.side : 'south';
     const offset = side === 'north' ? -60 : 60;
 
-    if (this.currentChair) this.currentChair.occupied = false;
+    if (this.currentChair) {
+      window.socket?.emit('standUp', { chairId: this.currentChair.id });
+      this.currentChair.occupied = false;
+    }
     this.isSitting    = false;
     this.currentChair = null;
 
@@ -2106,14 +2194,23 @@ class GameScene extends Phaser.Scene {
     sprite.on('pointerdown', () => {
       this._showPlayerCard(data);
     });
-    sprite.on('pointerover', () => sprite.setTint(0xffff99));
-    sprite.on('pointerout',  () => sprite.clearTint());
     const nameTag = this.add.text(data.x, data.y - 52, data.name, {
       fontFamily: '"Press Start 2P", monospace', fontSize: '6px',
       color: '#ffffff', stroke: '#000000', strokeThickness: 3,
-      backgroundColor: '#1a0b2e', padding: { x: 3, y: 2 },
-    }).setOrigin(0.5, 1).setDepth(data.y + 35);
-    this.otherPlayers[data.id] = { sprite, nameTag, chatBubble: null, data };
+      backgroundColor: '#1a0b2ecc', padding: { x: 3, y: 2 },
+    }).setOrigin(0.5, 1).setDepth(data.y + 35).setVisible(false); // hidden until hover
+
+    sprite.on('pointerover', () => { sprite.setTint(0xffff99); nameTag.setVisible(true);  });
+    sprite.on('pointerout',  () => { sprite.clearTint();        nameTag.setVisible(false); });
+
+    // Floating status icon above the other player's head
+    const statusIcon = this.add.image(data.x, data.y - 54, 'icon_book')
+      .setVisible(false).setOrigin(0.5, 1).setScale(0.85).setDepth(data.y + 30);
+
+    this.otherPlayers[data.id] = { sprite, nameTag, chatBubble: null, statusIcon, data };
+
+    // Show existing icon if they already had one when we joined
+    if (data.statusIcon) this._setOtherStatusIcon(data.id, data.statusIcon);
   }
 
   _moveOtherPlayer(id, x, y) {
@@ -2122,6 +2219,7 @@ class GameScene extends Phaser.Scene {
     op.sprite.setPosition(x, y).setDepth(y);
     op.nameTag.setPosition(x, y - 52).setDepth(y + 35);
     if (op.chatBubble) op.chatBubble.setPosition(x, y - 72).setDepth(y + 36);
+    if (op.statusIcon) op.statusIcon.setPosition(x, y - 54).setDepth(y + 30);
     op.data.x = x;
     op.data.y = y;
   }
@@ -2132,6 +2230,7 @@ class GameScene extends Phaser.Scene {
     op.sprite.destroy();
     op.nameTag.destroy();
     if (op.chatBubble) op.chatBubble.destroy();
+    if (op.statusIcon) op.statusIcon.destroy();
     delete this.otherPlayers[id];
   }
 
@@ -2215,7 +2314,6 @@ class GameScene extends Phaser.Scene {
       .filter(op => Phaser.Math.Distance.Between(this.player.x, this.player.y, op.data.x, op.data.y) < 120)
       .map(op => op.data.id);
     window.socket?.emit('sendChat', { message: message.trim(), nearbyIds });
-    this._showChatBubble(null, message.trim(), true);
     this._closeChat();
   }
 

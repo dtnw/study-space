@@ -1,0 +1,352 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #0a0a14;
+  --panel:    #12121e;
+  --border:   #2a2a3e;
+  --accent:   #c87df0;
+  --accent2:  #7cb8f0;
+  --green:    #4cde7a;
+  --red:      #f05060;
+  --text:     #e8e0d0;
+  --dim:      #6a6080;
+  --font:     'Press Start 2P', monospace;
+  --radius:   4px;
+}
+
+html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); overflow-x: hidden; }
+
+/* ── Star canvas ───────────────────────────────── */
+#star-canvas {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Header ────────────────────────────────────── */
+.lp-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 32px;
+  background: rgba(10,10,20,0.85);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(8px);
+}
+.lp-logo {
+  font-size: 14px;
+  color: var(--accent);
+  letter-spacing: 1px;
+}
+.lp-nav-link {
+  font-family: var(--font);
+  font-size: 8px;
+  color: #9b6bdb;
+  text-decoration: none;
+  padding: 6px 10px;
+  border: 1px solid #9b6bdb;
+  border-radius: var(--radius);
+  transition: background 0.2s, color 0.2s;
+}
+.lp-nav-link:hover { background: #9b6bdb; color: #fff; }
+
+/* ── Main layout ───────────────────────────────── */
+.lp-main {
+  position: relative;
+  z-index: 1;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 0 24px 60px;
+}
+
+/* ── Hero ──────────────────────────────────────── */
+.lp-hero {
+  text-align: center;
+  padding: 64px 0 48px;
+}
+.lp-title {
+  font-size: clamp(18px, 3vw, 28px);
+  line-height: 1.8;
+  color: var(--text);
+  margin-bottom: 24px;
+}
+.lp-title-accent {
+  color: var(--accent);
+  text-shadow: 0 0 20px rgba(200,125,240,0.5);
+  animation: titleGlow 2.5s ease-in-out infinite alternate;
+}
+@keyframes titleGlow {
+  from { text-shadow: 0 0 10px rgba(200,125,240,0.3); }
+  to   { text-shadow: 0 0 28px rgba(200,125,240,0.8), 0 0 50px rgba(200,125,240,0.3); }
+}
+.lp-subtitle {
+  font-size: 8px;
+  color: var(--dim);
+  line-height: 2.4;
+  max-width: 560px;
+  margin: 0 auto 36px;
+}
+.lp-features {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+.lp-feature-pill {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  padding: 7px 14px;
+  font-size: 7px;
+  color: var(--dim);
+  transition: border-color 0.2s, color 0.2s;
+}
+.lp-feature-pill:hover { border-color: var(--accent); color: var(--text); }
+
+/* ── Section titles ────────────────────────────── */
+.lp-section-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.lp-section-title-text {
+  font-size: 12px;
+  color: var(--text);
+}
+.live-count-badge {
+  background: var(--green);
+  color: #000;
+  font-size: 7px;
+  padding: 4px 8px;
+  border-radius: 99px;
+  animation: pulseBadge 1.5s infinite;
+}
+.live-count-badge.hidden { display: none; }
+@keyframes pulseBadge {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.6; }
+}
+
+/* ── Spaces grid ───────────────────────────────── */
+.lp-spaces-section { margin-bottom: 64px; }
+.lp-spaces-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 20px;
+}
+
+/* skeleton */
+.room-card-skeleton {
+  height: 280px;
+  background: linear-gradient(90deg, var(--panel) 25%, #1a1a2e 50%, var(--panel) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* room card */
+.room-card {
+  position: relative;
+  background: var(--panel);
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+  cursor: pointer;
+}
+.room-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--accent);
+  box-shadow: 0 8px 32px rgba(200,125,240,0.2);
+}
+.room-card.live {
+  border-color: var(--green);
+  box-shadow: 0 0 16px rgba(76,222,122,0.15);
+}
+.room-card.live:hover {
+  box-shadow: 0 8px 32px rgba(76,222,122,0.3);
+}
+.room-card.offline {
+  opacity: 0.85;
+}
+
+/* card banner */
+.room-card-banner {
+  height: 80px;
+  background: linear-gradient(135deg, #1a1230 0%, #0f0f20 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+}
+.room-card-banner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 30% 50%, rgba(200,125,240,0.12) 0%, transparent 70%);
+}
+.room-banner-icon { font-size: 36px; z-index: 1; filter: drop-shadow(0 0 8px rgba(200,125,240,0.4)); }
+
+/* live badge */
+.room-live-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  font-family: var(--font);
+  font-size: 7px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  z-index: 2;
+}
+.room-live-badge.live { background: var(--green); color: #000; animation: pulseBadge 1.5s infinite; }
+.room-live-badge.offline { background: #333; color: #666; }
+
+.room-viewer-count {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  font-family: var(--font);
+  font-size: 7px;
+  color: #fff;
+  background: rgba(0,0,0,0.6);
+  padding: 3px 7px;
+  border-radius: 4px;
+  z-index: 2;
+}
+.room-viewer-count.hidden { display: none; }
+
+/* card body */
+.room-card-body {
+  padding: 14px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.room-card-name {
+  font-size: 10px;
+  color: var(--text);
+  line-height: 1.6;
+}
+.room-card-streamer {
+  font-size: 7px;
+  color: var(--accent);
+}
+.room-card-stream-title {
+  font-size: 7px;
+  color: #aaa;
+  line-height: 1.8;
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.room-card-game {
+  font-size: 6px;
+  color: var(--dim);
+}
+.room-card-players {
+  font-size: 7px;
+  color: var(--dim);
+  margin-top: auto;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+/* enter button */
+.room-enter-btn {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px;
+  font-family: var(--font);
+  font-size: 8px;
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: filter 0.2s, transform 0.1s;
+  text-decoration: none;
+  text-align: center;
+}
+.room-card.live    .room-enter-btn { background: var(--green);  color: #000; }
+.room-card.offline .room-enter-btn { background: #2a2a3e; color: #aaa; }
+.room-enter-btn:hover { filter: brightness(1.15); transform: scale(1.01); }
+
+/* no-spaces placeholder */
+.lp-no-spaces {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 48px;
+  font-size: 8px;
+  color: var(--dim);
+  line-height: 2.5;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+}
+
+/* ── How it works ──────────────────────────────── */
+.lp-how-section { margin-bottom: 64px; }
+.lp-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 16px;
+}
+.lp-step {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px 16px;
+  transition: border-color 0.2s;
+}
+.lp-step:hover { border-color: var(--accent2); }
+.lp-step-num {
+  font-size: 18px;
+  color: var(--accent);
+  margin-bottom: 12px;
+  opacity: 0.6;
+}
+.lp-step-title {
+  font-size: 8px;
+  color: var(--text);
+  margin-bottom: 10px;
+}
+.lp-step-desc {
+  font-size: 7px;
+  color: var(--dim);
+  line-height: 2;
+}
+
+/* ── Footer ────────────────────────────────────── */
+.lp-footer {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  padding: 20px;
+  border-top: 1px solid var(--border);
+  font-size: 7px;
+  color: var(--dim);
+}
+
+/* ── Responsive ────────────────────────────────── */
+@media (max-width: 600px) {
+  .lp-header { padding: 10px 16px; }
+  .lp-logo { font-size: 10px; }
+  .lp-title { font-size: 16px; }
+  .lp-main { padding: 0 16px 48px; }
+}

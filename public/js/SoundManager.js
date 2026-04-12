@@ -30,8 +30,11 @@
     } catch (_) {}
   }
 
+  let _deafened = false;
+
   window.SoundManager = {
     play(key) {
+      if (_deafened) return;
       const p = PRESETS[key];
       if (!p) return;
       if (Array.isArray(p.freq)) {
@@ -42,5 +45,12 @@
         _beep(p.freq, p.dur, p.type, p.vol);
       }
     },
+    setDeafened(val) {
+      _deafened = val;
+      // Mute/unmute all live voice-chat audio elements
+      document.querySelectorAll('audio[id^="voice-audio-"]')
+        .forEach(a => { a.muted = val; });
+    },
+    isDeafened() { return _deafened; },
   };
 })();

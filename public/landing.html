@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cozy Corner 🌸 — Study with Your Favorite Streamers</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/landing.css" />
+</head>
+<body>
+  <canvas id="star-canvas"></canvas>
+
+  <header class="lp-header">
+    <div class="lp-logo">🌸 Cozy Corner</div>
+    <div class="lp-nav">
+      <a href="https://twitch.tv/derbysaren" target="_blank" rel="noopener" class="lp-nav-link">📺 Watch Derby</a>
+    </div>
+  </header>
+
+  <main class="lp-main">
+
+    <!-- Hero -->
+    <section class="lp-hero">
+      <div class="lp-hero-title-wrap">
+        <h1 class="lp-title">Welcome to<br/><span class="lp-title-accent">Cozy Corner</span></h1>
+        <p class="lp-subtitle">A cozy 8-bit study world — join your favourite streamer's room, set timers, do tasks together, and vibe.</p>
+      </div>
+      <div class="lp-features">
+        <div class="lp-feature-pill">🍅 Pomodoro Timer</div>
+        <div class="lp-feature-pill">📋 Shared Tasks</div>
+        <div class="lp-feature-pill">💬 Live Chat</div>
+        <div class="lp-feature-pill">📞 Voice &amp; Video Calls</div>
+        <div class="lp-feature-pill">🎨 Pixel Avatars</div>
+        <div class="lp-feature-pill">🌿 Decorate Your Space</div>
+      </div>
+    </section>
+
+    <!-- Spaces grid -->
+    <section class="lp-spaces-section">
+      <h2 class="lp-section-title">
+        <span class="lp-section-title-text">Open Spaces</span>
+        <span id="live-count-badge" class="live-count-badge hidden"></span>
+      </h2>
+      <div id="spaces-grid" class="lp-spaces-grid">
+        <!-- injected by landing.js -->
+        <div class="room-card-skeleton"></div>
+      </div>
+    </section>
+
+    <!-- How it works -->
+    <section class="lp-how-section">
+      <h2 class="lp-section-title"><span class="lp-section-title-text">How It Works</span></h2>
+      <div class="lp-steps">
+        <div class="lp-step">
+          <div class="lp-step-num">01</div>
+          <div class="lp-step-title">Pick a Space</div>
+          <div class="lp-step-desc">Find a room that's open — live spaces glow green!</div>
+        </div>
+        <div class="lp-step">
+          <div class="lp-step-num">02</div>
+          <div class="lp-step-title">Enter &amp; Explore</div>
+          <div class="lp-step-desc">Choose your pixel avatar, walk around, sit down, and get cozy.</div>
+        </div>
+        <div class="lp-step">
+          <div class="lp-step-num">03</div>
+          <div class="lp-step-title">Study Together</div>
+          <div class="lp-step-desc">Set a Pomodoro, add tasks, chat with others, and stay focused.</div>
+        </div>
+        <div class="lp-step">
+          <div class="lp-step-num">04</div>
+          <div class="lp-step-title">Have Fun</div>
+          <div class="lp-step-desc">Cook, chill, work out — and earn coins for everything you do!</div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="lp-footer">
+    <span>🌸 Cozy Corner — Made with love for study communities</span>
+  </footer>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="js/landing.js"></script>
+</body>
+</html>
