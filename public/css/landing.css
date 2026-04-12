@@ -14,7 +14,8 @@
   --radius:   4px;
 }
 
-html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); overflow-x: hidden; }
+html { min-height: 100%; background: var(--bg); }
+body { min-height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); overflow-x: hidden; overflow-y: auto; }
 
 /* ── Star canvas ───────────────────────────────── */
 #star-canvas {
@@ -350,3 +351,109 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
   .lp-title { font-size: 16px; }
   .lp-main { padding: 0 16px 48px; }
 }
+
+/* ── Room card avatar ────────────────────────────────────── */
+.room-banner-avatar {
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid rgba(255,255,255,0.25);
+  z-index: 1;
+}
+.room-enter-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.lp-offline-banner {
+  background: rgba(255,60,60,0.12);
+  border: 1px solid #c04;
+  color: #f88;
+  font-size: 8px;
+  padding: 10px 16px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+  text-align: center;
+  line-height: 2;
+}
+
+/* ── Creator CTA ─────────────────────────────────────────── */
+.lp-creator-section { text-align: center; padding: 40px 20px 56px; }
+.lp-creator-desc { font-size: 8px; color: var(--dim); line-height: 2.4; margin: 12px auto 24px; max-width: 480px; }
+.lp-creator-btn { font-size: 9px; padding: 12px 28px; background: var(--accent); color: #fff; border: none; cursor: pointer; }
+.lp-creator-btn:hover { background: #b060e8; }
+
+/* ── Creator modal ───────────────────────────────────────── */
+.lp-modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.75);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 3000;
+}
+.lp-modal-overlay.hidden { display: none; }
+.lp-modal-box {
+  background: #111120;
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  padding: 28px 32px;
+  max-width: 380px; width: 90%;
+  text-align: center;
+}
+.lp-modal-title { font-size: 12px; color: var(--text); margin-bottom: 12px; }
+.lp-modal-sub { font-size: 8px; color: var(--dim); margin-bottom: 16px; line-height: 2; }
+.lp-modal-input {
+  width: 100%;
+  font-family: var(--font);
+  font-size: 9px;
+  background: #1a1a2e;
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px 12px;
+  border-radius: 4px;
+  outline: none;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+.lp-modal-input:focus { border-color: var(--accent); }
+.lp-modal-error { font-size: 7px; color: var(--red); min-height: 16px; margin-bottom: 8px; }
+.lp-modal-actions { display: flex; gap: 10px; justify-content: center; margin-top: 8px; }
+.lp-pixel-btn {
+  font-family: var(--font);
+  font-size: 8px;
+  padding: 8px 16px;
+  border: 2px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+  border-radius: 2px;
+}
+.lp-pixel-btn:hover { border-color: var(--accent); }
+.lp-pixel-btn.danger { border-color: var(--red); color: var(--red); }
+.lp-pixel-btn.danger:hover { background: var(--red); color: #fff; }
+
+/* ── Hero auth buttons ───────────────────────────────────── */
+.lp-hero-auth {
+  margin-top: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.lp-twitch-signin-btn {
+  font-family: var(--font);
+  font-size: 9px;
+  background: #9146FF;
+  color: #fff;
+  text-decoration: none;
+  padding: 12px 24px;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+.lp-twitch-signin-btn:hover { background: #7d3ae8; }
+.lp-guest-link {
+  font-family: var(--font);
+  font-size: 7px;
+  color: var(--dim);
+  text-decoration: none;
+}
+.lp-guest-link:hover { color: var(--text); }

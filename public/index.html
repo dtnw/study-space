@@ -351,10 +351,28 @@
   <!-- Name entry (shown on first load) -->
   <div id="name-modal" class="modal-overlay active">
     <div class="modal-box">
-      <h2>WELCOME!</h2>
-      <p>Enter your name to join the study space.</p>
-      <input type="text" id="name-input" class="pixel-input" placeholder="Your name…" maxlength="16" autocomplete="off" />
-      <p id="name-error" class="name-error"></p>
+      <!-- STATE A: No Twitch session — guest/sign-in choice -->
+      <div id="nm-guest-state">
+        <h2>WELCOME!</h2>
+        <p style="font-size:7px;line-height:2;color:#aaa;margin-bottom:12px">Sign in with Twitch to use your streamer name — or play as a guest.</p>
+        <a href="/auth/twitch?role=player&return=/play" class="pixel-btn nm-twitch-signin">🟣 Sign in with Twitch</a>
+        <div class="nm-divider">— or play as guest —</div>
+        <input type="text" id="name-input" class="pixel-input" placeholder="Guest name…" maxlength="16" autocomplete="off" />
+        <p id="name-error" class="name-error"></p>
+      </div>
+
+      <!-- STATE B: Twitch session found — hidden by default, shown by JS -->
+      <div id="nm-twitch-state" class="hidden">
+        <div class="nm-twitch-welcome">
+          <img id="nm-avatar" src="" alt="" class="nm-avatar-img" />
+          <div>
+            <h2 id="nm-welcome-text">WELCOME!</h2>
+            <p id="nm-twitch-handle" class="nm-twitch-handle"></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Shared: gender + color + join (always visible) -->
       <div class="gender-select">
         <button id="gender-boy-btn"  class="pixel-btn gender-btn active" data-gender="male">BOY</button>
         <button id="gender-girl-btn" class="pixel-btn gender-btn"        data-gender="female">GIRL</button>

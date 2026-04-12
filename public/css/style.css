@@ -1495,3 +1495,21 @@ body:has(.modal-overlay.active) #game-container canvas { pointer-events: none; }
   transition: color 0.15s, border-color 0.15s;
 }
 .lp-back-btn:hover { color: var(--text); border-color: var(--accent); }
+
+/* ── Twitch name modal ───────────────────────────────────── */
+.nm-twitch-signin {
+  display: block;
+  text-align: center;
+  background: #9146FF;
+  color: #fff;
+  margin: 6px auto 4px;
+  text-decoration: none;
+  padding: 9px 16px;
+  font-size: 8px;
+}
+.nm-twitch-signin:hover { background: #7d3ae8; }
+.nm-divider { font-size: 7px; color: #666; text-align: center; margin: 10px 0 8px; }
+.nm-twitch-welcome { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.nm-avatar-img { width: 52px; height: 52px; border-radius: 50%; border: 2px solid #9B6BDB; object-fit: cover; }
+.nm-twitch-handle { font-size: 7px; color: #9B6BDB; margin-top: 4px; }
+#nm-twitch-state.hidden, #nm-guest-state.hidden { display: none; }

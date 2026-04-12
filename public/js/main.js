@@ -219,6 +219,34 @@
   // ── Gender toggle ──────────────────────────────────────────
   let _selectedGender = 'male';
 
+  // ── Twitch player session detection ─────────────────────────
+  window._suppressAutoJoin = false;
+  (async function _initTwitchSession() {
+    const params = new URLSearchParams(location.search);
+    const psid   = params.get('psid');
+    if (!psid) return;
+    window._suppressAutoJoin = true;
+    history.replaceState({}, '', '/play');
+    try {
+      const res = await fetch('/api/session/' + encodeURIComponent(psid));
+      if (!res.ok) { window._suppressAutoJoin = false; return; }
+      const data = await res.json();
+      const nameInputEl = document.getElementById('name-input');
+      if (nameInputEl) nameInputEl.value = data.name || '';
+      sessionStorage.setItem('studyspace_name', data.name || '');
+      window._twitchSession = data;
+      document.getElementById('nm-guest-state')?.classList.add('hidden');
+      const ts = document.getElementById('nm-twitch-state');
+      if (ts) ts.classList.remove('hidden');
+      const wt = document.getElementById('nm-welcome-text');
+      if (wt) wt.textContent = 'WELCOME BACK!';
+      const th = document.getElementById('nm-twitch-handle');
+      if (th) th.textContent = '@' + (data.twitchLogin || data.name || '');
+      const av = document.getElementById('nm-avatar');
+      if (av && data.profilePic) { av.src = data.profilePic; av.style.display = 'block'; }
+    } catch(e) { window._suppressAutoJoin = false; }
+  })();
+
   document.getElementById('gender-boy-btn').addEventListener('click', () => {
     SoundManager.play('click');
     _selectedGender = 'male';
@@ -315,7 +343,7 @@
   const savedName  = sessionStorage.getItem('studyspace_name');
   const savedGender = sessionStorage.getItem('studyspace_gender');
   const savedColor  = sessionStorage.getItem('studyspace_shirtColor');
-  if (savedName) {
+  if (savedName && !window._suppressAutoJoin) {
     // Restore UI selections silently, then join without showing modal
     nameInput.value = savedName;
     if (savedGender) {
@@ -1333,7 +1361,7 @@
     if (twitchResult === 'connected') showToast('🟣 Twitch connected successfully!');
     else if (twitchResult === 'error') showToast('❌ Twitch connection failed. Check your config.');
     // Clean URL
-    history.replaceState({}, '', '/');
+    history.replaceState({}, '', '/play');
   }
 
   function _setLockedInOverlay(on) {

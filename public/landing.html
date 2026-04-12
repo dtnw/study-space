@@ -34,6 +34,10 @@
         <div class="lp-feature-pill">🎨 Pixel Avatars</div>
         <div class="lp-feature-pill">🌿 Decorate Your Space</div>
       </div>
+      <div class="lp-hero-auth">
+        <a href="/auth/twitch?role=player&return=/play" class="lp-twitch-signin-btn">🟣 Sign in with Twitch to Play</a>
+        <a href="/play?preview=1" class="lp-guest-link">or browse as guest →</a>
+      </div>
     </section>
 
     <!-- Spaces grid -->
@@ -47,6 +51,27 @@
         <div class="room-card-skeleton"></div>
       </div>
     </section>
+
+    <!-- Creator CTA -->
+    <section class="lp-creator-section">
+      <h2 class="lp-section-title"><span class="lp-section-title-text">Are You a Streamer?</span></h2>
+      <p class="lp-creator-desc">Build a cozy pixel study room for your community. Get early access with an invite code.</p>
+      <button class="pixel-btn lp-creator-btn" onclick="openCreatorModal()">✨ Create Your Corner</button>
+    </section>
+
+    <!-- Creator onboarding modal (hidden) -->
+    <div id="creator-modal" class="lp-modal-overlay hidden">
+      <div class="lp-modal-box">
+        <h2 class="lp-modal-title">CREATE YOUR CORNER</h2>
+        <p class="lp-modal-sub">Enter your early-access invite code:</p>
+        <input type="text" id="creator-code-input" class="lp-modal-input" placeholder="CC-XXXXXX" maxlength="16" autocomplete="off" />
+        <p id="creator-code-error" class="lp-modal-error"></p>
+        <div class="lp-modal-actions">
+          <button id="creator-code-submit" class="pixel-btn lp-pixel-btn">Continue →</button>
+          <button class="pixel-btn lp-pixel-btn danger" onclick="closeCreatorModal()">✕ Cancel</button>
+        </div>
+      </div>
+    </div>
 
     <!-- How it works -->
     <section class="lp-how-section">

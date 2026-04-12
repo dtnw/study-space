@@ -75,12 +75,17 @@ function renderSpaces(spaces) {
       : (isLive ? '' : '<div class="room-card-stream-title" style="color:#555">Not streaming right now</div>');
     const game     = space.gameName ? '<div class="room-card-game">🎮 ' + esc(space.gameName) + '</div>' : '';
     const players  = '<div class="room-card-players">👥 ' + (space.playersOnline || 0) + ' ' + (space.playersOnline === 1 ? 'person' : 'people') + ' in the space</div>';
-    const btnLabel = isLive ? 'Enter Space →' : 'View Room →';
+    const bannerContent = space.creatorAvatar
+      ? `<img src="${esc(space.creatorAvatar)}" alt="" class="room-banner-avatar" />`
+      : `<span class="room-banner-icon">🌸</span>`;
+    const enterBtn = isLive
+      ? `<a href="${esc(space.roomPath)}" class="room-enter-btn" onclick="event.stopPropagation()">Enter Space →</a>`
+      : `<button class="room-enter-btn room-enter-disabled" disabled>Stream Offline</button>`;
 
     return `
       <div class="room-card ${cls}" onclick="enterSpace('${esc(space.roomPath)}')">
         <div class="room-card-banner">
-          <span class="room-banner-icon">🌸</span>
+          ${bannerContent}
           ${badge}
           ${viewers}
         </div>
@@ -90,7 +95,7 @@ function renderSpaces(spaces) {
           ${title}
           ${game}
           ${players}
-          <a href="${esc(space.roomPath)}" class="room-enter-btn" onclick="event.stopPropagation()">${btnLabel}</a>
+          ${enterBtn}
         </div>
       </div>`;
   }).join('');
@@ -117,8 +122,40 @@ async function loadSpaces() {
 
 loadSpaces();
 
+(function() {
+  const _p = new URLSearchParams(location.search);
+  if (_p.get('msg') === 'offline') {
+    const banner = document.createElement('div');
+    banner.className = 'lp-offline-banner';
+    banner.innerHTML = '⚠️ That space is offline right now. Check back when Derby goes live!';
+    const main = document.querySelector('.lp-main');
+    if (main) main.prepend(banner);
+    history.replaceState({}, '', '/');
+  }
+})();
+
 // ── Real-time updates via Socket.io ───────────────────────
 try {
   const socket = io();
   socket.on('spaceStatus', () => loadSpaces());  // re-fetch on any live status change
 } catch(e) {}
+
+function openCreatorModal() {
+  document.getElementById('creator-modal')?.classList.remove('hidden');
+  setTimeout(() => document.getElementById('creator-code-input')?.focus(), 50);
+}
+function closeCreatorModal() {
+  document.getElementById('creator-modal')?.classList.add('hidden');
+}
+document.getElementById('creator-code-submit')?.addEventListener('click', async () => {
+  const code  = document.getElementById('creator-code-input')?.value.trim().toUpperCase();
+  const errEl = document.getElementById('creator-code-error');
+  if (!code) { if (errEl) errEl.textContent = 'Enter your invite code.'; return; }
+  if (errEl) errEl.textContent = '';
+  try {
+    const res  = await fetch('/api/creator-codes/validate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) });
+    const data = await res.json();
+    if (!data.valid) { if (errEl) errEl.textContent = 'Invalid or already used code. Try again.'; return; }
+    window.location.href = '/auth/twitch?role=creator&return=/play';
+  } catch(e) { if (errEl) errEl.textContent = 'Network error. Try again.'; }
+});

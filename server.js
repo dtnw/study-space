@@ -50,7 +50,13 @@ const io = new Server(httpServer);
 
 // ── Page routes ──────────────────────────────────────────
 app.get('/',     (req, res) => res.sendFile(path.join(__dirname, 'public', 'landing.html')));
-app.get('/play', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.get('/play', (req, res) => {
+  const bypass = req.query.preview || req.query.twitch || req.query.psid;
+  if (!spaceStatus.live && !bypass) {
+    return res.redirect('/?msg=offline');
+  }
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
@@ -107,6 +113,16 @@ const seatOccupancy = {};
 const activeCalls = {};
 let _callIdSeq = 0;
 function _makeCallId() { return 'call-' + Date.now() + '-' + (++_callIdSeq); }
+
+const playerSessions = new Map();   // token → { name, twitchLogin, profilePic, expiresAt }
+const CREATOR_CODES_PATH = path.join(__dirname, 'data', 'creator-codes.json');
+function loadCreatorCodes() {
+  try { if (fs.existsSync(CREATOR_CODES_PATH)) return JSON.parse(fs.readFileSync(CREATOR_CODES_PATH, 'utf8')); } catch(e) {}
+  return [];
+}
+function saveCreatorCodes(codes) {
+  try { fs.mkdirSync(path.dirname(CREATOR_CODES_PATH), { recursive: true }); fs.writeFileSync(CREATOR_CODES_PATH, JSON.stringify(codes, null, 2)); } catch(e) {}
+}
 
 // ── Twitch integration ────────────────────────────────────
 function loadTwitchConfig() {
@@ -166,25 +182,52 @@ async function checkLiveStatus() {
 setInterval(checkLiveStatus, 60000);
 checkLiveStatus();
 
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of playerSessions) { if (now > v.expiresAt) playerSessions.delete(k); }
+}, 5 * 60 * 1000);
+
 app.get('/auth/twitch', (req, res) => {
   if (!twitchCfg.clientId) return res.send('<h2>Set clientId in data/twitch-config.json first.</h2>');
-  const p = new URLSearchParams({ client_id: twitchCfg.clientId, redirect_uri: twitchCfg.redirectUri, response_type: 'code', scope: 'user:read:email' });
+  const role  = req.query.role === 'player' ? 'player' : 'creator';
+  const ret   = req.query.return || '/play';
+  const state = Buffer.from(JSON.stringify({ role, return: ret })).toString('base64url');
+  const p = new URLSearchParams({
+    client_id:     twitchCfg.clientId,
+    redirect_uri:  twitchCfg.redirectUri,
+    response_type: 'code',
+    scope:         'user:read:email',
+    state,
+  });
   res.redirect(`https://id.twitch.tv/oauth2/authorize?${p}`);
 });
 
 app.get('/auth/twitch/callback', async (req, res) => {
-  const { code, error } = req.query;
+  const { code, error, state } = req.query;
   if (error || !code) return res.redirect('/play?twitch=error');
+  let stateObj = { role: 'creator', return: '/play' };
+  try { stateObj = JSON.parse(Buffer.from(state || '', 'base64url').toString()); } catch(e) {}
   try {
     const params = new URLSearchParams({ client_id: twitchCfg.clientId, client_secret: twitchCfg.clientSecret, code, grant_type: 'authorization_code', redirect_uri: twitchCfg.redirectUri });
     const tokenData = await _httpsPost('id.twitch.tv', '/oauth2/token', params.toString());
     if (!tokenData.access_token) return res.redirect('/play?twitch=error');
     const userResp = await _httpsGet('api.twitch.tv', '/helix/users', twitchHeaders(tokenData.access_token));
     const user = userResp.body?.data?.[0];
-    twitchToken = { accessToken: tokenData.access_token, refreshToken: tokenData.refresh_token, twitchUserId: user?.id, twitchLogin: user?.login, twitchDisplayName: user?.display_name };
+    if (stateObj.role === 'player') {
+      const token = 'ps-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9);
+      playerSessions.set(token, {
+        name:        user?.display_name || user?.login || 'Viewer',
+        twitchLogin: user?.login || null,
+        profilePic:  user?.profile_image_url || null,
+        expiresAt:   Date.now() + 10 * 60 * 1000,
+      });
+      return res.redirect(`/play?psid=${token}`);
+    }
+    // creator flow
+    twitchToken = { accessToken: tokenData.access_token, refreshToken: tokenData.refresh_token, twitchUserId: user?.id, twitchLogin: user?.login, twitchDisplayName: user?.display_name, profileImageUrl: user?.profile_image_url || null };
     saveTwitchToken(twitchToken);
     await checkLiveStatus();
-    res.redirect('/play?twitch=connected');
+    res.redirect('/play?twitch=connected&preview=1');
   } catch(e) { console.error('Twitch OAuth error:', e); res.redirect('/play?twitch=error'); }
 });
 
@@ -193,8 +236,18 @@ app.post('/auth/twitch/disconnect', (req, res) => {
   io.emit('spaceStatus', spaceStatus); res.json({ ok: true });
 });
 
+app.get('/api/session/:token', (req, res) => {
+  const session = playerSessions.get(req.params.token);
+  if (!session || Date.now() > session.expiresAt) {
+    playerSessions.delete(req.params.token);
+    return res.status(404).json({ error: 'invalid' });
+  }
+  playerSessions.delete(req.params.token);
+  res.json({ name: session.name, twitchLogin: session.twitchLogin, profilePic: session.profilePic });
+});
+
 app.get('/api/twitch/status', (req, res) => res.json(spaceStatus));
-app.get('/api/twitch/config', (req, res) => res.json({ configured: !!(twitchCfg.clientId && twitchCfg.clientSecret), connected: !!twitchToken?.twitchLogin, twitchUser: twitchToken?.twitchDisplayName || null }));
+app.get('/api/twitch/config', (req, res) => res.json({ configured: !!(twitchCfg.clientId && twitchCfg.clientSecret), connected: !!twitchToken?.twitchLogin, twitchUser: twitchToken?.twitchDisplayName || null, profileImageUrl: twitchToken?.profileImageUrl || null }));
 
 app.get('/api/spaces', (req, res) => {
   res.json([{
@@ -209,7 +262,28 @@ app.get('/api/spaces', (req, res) => {
     gameName:      spaceStatus.gameName,
     twitchUser:    spaceStatus.twitchUser,
     playersOnline: Object.keys(players).length,
+    creatorAvatar: twitchToken?.profileImageUrl || null,
   }]);
+});
+
+app.post('/api/creator-codes/validate', (req, res) => {
+  const { code } = req.body || {};
+  if (!code) return res.status(400).json({ valid: false });
+  const codes = loadCreatorCodes();
+  const entry = codes.find(c => c.code === code.toUpperCase().trim() && !c.used);
+  if (!entry) return res.status(400).json({ valid: false });
+  entry.used = true; entry.usedBy = req.ip; entry.usedAt = new Date().toISOString();
+  saveCreatorCodes(codes);
+  res.json({ valid: true });
+});
+app.get('/admin/generate-code', (req, res) => {
+  const ip = req.socket.remoteAddress;
+  if (!['127.0.0.1','::1','::ffff:127.0.0.1'].includes(ip)) return res.status(403).send('Forbidden');
+  const code = 'CC-' + Math.random().toString(36).slice(2, 8).toUpperCase();
+  const codes = loadCreatorCodes();
+  codes.push({ code, used: false, usedBy: null, createdAt: new Date().toISOString() });
+  saveCreatorCodes(codes);
+  res.json({ code, note: 'Share this with your customer. It can only be used once.' });
 });
 
 io.on('connection', (socket) => {
