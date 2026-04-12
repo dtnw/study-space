@@ -111,7 +111,7 @@ function _makeCallId() { return 'call-' + Date.now() + '-' + (++_callIdSeq); }
 // ── Twitch integration ────────────────────────────────────
 function loadTwitchConfig() {
   try { if (fs.existsSync(TWITCH_CONFIG_PATH)) return JSON.parse(fs.readFileSync(TWITCH_CONFIG_PATH, 'utf8')); } catch(e) {}
-  return { clientId: '', clientSecret: '', redirectUri: 'http://localhost:3000/auth/twitch/callback' };
+  return { clientId: 'fxqfxb53bn48lhba6t8bt3bpi0o2h3', clientSecret: 'r5dfve4346jgu4k7mbxnh0x41bp7tp', redirectUri: 'https://study-space-production.up.railway.app/auth/twitch/callback' };
 }
 function loadTwitchToken() {
   try { if (fs.existsSync(TWITCH_TOKEN_PATH)) return JSON.parse(fs.readFileSync(TWITCH_TOKEN_PATH, 'utf8')); } catch(e) {}
