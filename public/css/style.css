@@ -386,6 +386,26 @@ html, body {
   to   { opacity: 1; transform: translateX(-50%) translateY(0);   }
 }
 
+/* ── Watch Live header badge ───────────────────────────── */
+.watch-live-header-btn {
+  font-family: var(--font);
+  font-size: 7px;
+  color: #fff;
+  background: #e84040;
+  border: 2px solid #ff6060;
+  padding: 3px 8px;
+  text-decoration: none;
+  border-radius: 2px;
+  letter-spacing: 0.5px;
+  animation: pulse-red 1.5s ease-in-out infinite;
+  white-space: nowrap;
+}
+.watch-live-header-btn:hover { background: #ff5555; }
+@keyframes pulse-red {
+  0%, 100% { box-shadow: 0 0 4px #e84040; }
+  50%       { box-shadow: 0 0 10px #ff6060, 0 0 4px #e84040; }
+}
+
 /* ── Modals ────────────────────────────────────────────── */
 .modal-overlay {
   position: fixed;

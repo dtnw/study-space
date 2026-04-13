@@ -59,6 +59,19 @@ app.get('/play', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Direct space links: /space/derbysaren  or  /@derbysaren  → redirects to that room
+app.get('/space/:login', (req, res) => {
+  const login = req.params.login.toLowerCase().trim();
+  // Map known creator logins to their room paths
+  const spaceMap = { [twitchCfg.creatorLogin?.toLowerCase()]: '/play' };
+  const roomPath = spaceMap[login];
+  if (roomPath) return res.redirect(roomPath);
+  res.redirect('/'); // unknown space → back to lobby
+});
+app.get('/@:login', (req, res) => {
+  res.redirect('/space/' + req.params.login);
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 

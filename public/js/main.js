@@ -10,6 +10,19 @@
 (function () {
   // ── Single-tab enforcement (signed-in users only) ──────────
   const _myTabId = 'tab-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
+  // ── Auth guard: redirect to landing if no valid session ──────
+  (function _authGuard() {
+    try {
+      const raw = localStorage.getItem('cc_session');
+      if (!raw) { window.location.replace('/'); return; }
+      const s = JSON.parse(raw);
+      if (!s || Date.now() > (s.expiresAt || 0)) {
+        localStorage.removeItem('cc_session');
+        window.location.replace('/');
+      }
+    } catch(e) { window.location.replace('/'); }
+  })();
+
   const _tabChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('cc_game_tab') : null;
   (function _initTabEnforcement() {
     const raw = localStorage.getItem('cc_session');
@@ -96,20 +109,15 @@
   socket.on('spaceStatus', (status) => {
     window._spaceStatus = status;
     window._updateSpacePanel?.(status);
-    // Streamer bar
-    const bar = document.getElementById('streamer-bar');
-    if (bar) {
+    // Header "Watch Live" badge — shown when streaming
+    const watchLiveHeader = document.getElementById('watch-live-header');
+    if (watchLiveHeader) {
       if (status.live && status.twitchLogin) {
         const url = 'https://twitch.tv/' + encodeURIComponent(status.twitchLogin);
-        const watchBtn = document.getElementById('watch-live-btn');
-        const followBtn = document.getElementById('follow-btn');
-        const handle = document.getElementById('streamer-bar-handle');
-        if (watchBtn) watchBtn.href = url;
-        if (followBtn) followBtn.href = url;
-        if (handle) handle.textContent = status.twitchLogin;
-        bar.classList.remove('hidden');
+        watchLiveHeader.href = url;
+        watchLiveHeader.classList.remove('hidden');
       } else {
-        bar.classList.add('hidden');
+        watchLiveHeader.classList.add('hidden');
       }
     }
   });
@@ -385,12 +393,21 @@
     }
     // Pre-fill identity for OAuth users
     const nameInputEl = document.getElementById('name-input');
-    if (nameInputEl && session.name) { nameInputEl.value = session.name; window._suppressAutoJoin = true; }
+    if (nameInputEl && session.name) nameInputEl.value = session.name;
     sessionStorage.setItem('studyspace_name', session.name || '');
     // Restore avatar choices saved on last join
     if (session.gender)     sessionStorage.setItem('studyspace_gender',     session.gender);
     if (session.shirtColor) sessionStorage.setItem('studyspace_shirtColor', session.shirtColor);
-    // Show Twitch/Google welcome state
+    // If appearance already chosen, auto-join without showing the modal
+    if (session.gender && session.shirtColor) {
+      const _nm = document.getElementById('name-modal');
+      _nm?.classList.add('hidden');
+      _nm?.classList.remove('active');
+      // _suppressAutoJoin stays false → auto-rejoin logic fires
+      return;
+    }
+    // First time or missing appearance — show WELCOME BACK modal so they can pick
+    window._suppressAutoJoin = true;
     document.getElementById('nm-guest-state')?.classList.add('hidden');
     const ts = document.getElementById('nm-twitch-state');
     if (ts) ts.classList.remove('hidden');
@@ -581,7 +598,7 @@
     window.socket?.disconnect();
     sessionStorage.clear();
     localStorage.removeItem('cc_session');
-    window.location.reload();
+    window.location.href = '/';
   });
 
   // ── Change Appearance ──────────────────────────────────────
