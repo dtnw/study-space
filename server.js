@@ -302,13 +302,13 @@ app.get('/auth/twitch', (req, res) => {
 
 app.get('/auth/twitch/callback', async (req, res) => {
   const { code, error, state } = req.query;
-  if (error || !code) return res.redirect('/play?twitch=error');
+  if (error || !code) return res.redirect('/?twitch=error');
   let stateObj = { role: 'creator', return: '/play' };
   try { stateObj = JSON.parse(Buffer.from(state || '', 'base64url').toString()); } catch(e) {}
   try {
     const params = new URLSearchParams({ client_id: twitchCfg.clientId, client_secret: twitchCfg.clientSecret, code, grant_type: 'authorization_code', redirect_uri: twitchCfg.redirectUri });
     const tokenData = await _httpsPost('id.twitch.tv', '/oauth2/token', params.toString());
-    if (!tokenData.access_token) return res.redirect('/play?twitch=error');
+    if (!tokenData.access_token) return res.redirect('/?twitch=error');
     const userResp = await _httpsGet('api.twitch.tv', '/helix/users', twitchHeaders(tokenData.access_token));
     const user = userResp.body?.data?.[0];
     if (stateObj.role === 'player') {
@@ -321,14 +321,14 @@ app.get('/auth/twitch/callback', async (req, res) => {
         authType:    'twitch',
         expiresAt:   Date.now() + 10 * 60 * 1000,
       });
-      return res.redirect(`/play?psid=${token}`);
+      return res.redirect(`/?psid=${token}`);
     }
     // creator flow
     twitchToken = { accessToken: tokenData.access_token, refreshToken: tokenData.refresh_token, twitchUserId: user?.id, twitchLogin: user?.login, twitchDisplayName: user?.display_name, profileImageUrl: user?.profile_image_url || null };
     saveTwitchToken(twitchToken);
     await checkLiveStatus();
     res.redirect('/play?twitch=connected&preview=1');
-  } catch(e) { console.error('Twitch OAuth error:', e); res.redirect('/play?twitch=error'); }
+  } catch(e) { console.error('Twitch OAuth error:', e); res.redirect('/?twitch=error'); }
 });
 
 app.post('/auth/twitch/disconnect', (req, res) => {
@@ -479,6 +479,7 @@ io.on('connection', (socket) => {
 
   // Send current state to new player
   socket.emit('init', { tasks: globalTasks });
+  socket.emit('spaceStatus', spaceStatus);
 
   // ── Player join ──────────────────────────────────────────
   socket.on('playerJoin', ({ name, gender, shirtColor, clientId, startX, startY }) => {

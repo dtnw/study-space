@@ -28,7 +28,7 @@
         ov = document.createElement('div');
         ov.id = 'tab-conflict-overlay';
         ov.className = 'tab-conflict-overlay';
-        ov.innerHTML = '<div class="tab-conflict-box"><div class="tab-conflict-icon">🌸</div><p class="tab-conflict-msg">Cozy Corner is open in another window.</p><button id="tab-take-over-btn" class="pixel-btn">Refresh to use this window</button></div>';
+        ov.innerHTML = '<div class="tab-conflict-box"><div class="tab-conflict-icon">🌷</div><p class="tab-conflict-msg">Cozy Corner is open in another window.</p><button id="tab-take-over-btn" class="pixel-btn">Refresh to use this window</button></div>';
         document.body.appendChild(ov);
         document.getElementById('tab-take-over-btn')?.addEventListener('click', () => { _claimTab(); ov.remove(); });
       }
@@ -206,6 +206,25 @@
     if (Date.now() - last < _SAVE_PROMPT_MS) return;
     sessionStorage.setItem('cc_save_prompt_ts', String(Date.now()));
     _showGuestSaveOverlay();
+  });
+
+  document.querySelector('.lp-back-btn')?.addEventListener('click', (e) => {
+    if (!_isGuest()) return; // only for guests
+    if (!sessionStorage.getItem('studyspace_name')) return;
+    const last = parseInt(sessionStorage.getItem('cc_save_prompt_ts') || '0', 10);
+    if (Date.now() - last < _SAVE_PROMPT_MS) return; // already shown recently
+    e.preventDefault();
+    sessionStorage.setItem('cc_save_prompt_ts', String(Date.now()));
+    // Show overlay but modify the buttons to navigate after dismissing
+    _showGuestSaveOverlay();
+    // After overlay is created, patch the "Continue as guest" button to navigate to lobby
+    setTimeout(() => {
+      const skipBtn = document.getElementById('guest-save-skip-btn');
+      if (skipBtn) {
+        skipBtn.textContent = 'Continue to lobby as guest';
+        skipBtn.addEventListener('click', () => { window.location.href = '/'; }, { once: true });
+      }
+    }, 0);
   });
 
   socket.on('playerLeft', ({ id }) => {
@@ -1023,7 +1042,7 @@
     const allPlayers = Object.values(window._allPlayers || {}).filter(p => !_blockedIds.some(b => b.id === p.id));
     if (countEl) countEl.textContent = allPlayers.length > 0 ? allPlayers.length : '';
     if (allPlayers.length === 0) {
-      list.innerHTML = '<li class="members-empty">Just you here!<br/>Invite someone to study 🌸</li>';
+      list.innerHTML = '<li class="members-empty">Just you here!<br/>Invite someone to study 🌷</li>';
       return;
     }
     const friends = window.socialState.friends || [];

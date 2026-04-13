@@ -50,7 +50,7 @@ function _updateLandingHeader() {
         <button class="lp-signout-btn" onclick="window._signOut()">Sign out</button>
       </div>`;
   } else {
-    authArea.innerHTML = `<a href="/auth/twitch?role=player" class="lp-nav-link">🟣 Sign in</a>`;
+    authArea.innerHTML = '';
   }
 }
 
@@ -104,7 +104,7 @@ const liveBadge = document.getElementById('live-count-badge');
 function renderSpaces(spaces) {
   if (!grid) return;
   if (!spaces || spaces.length === 0) {
-    grid.innerHTML = '<div class="lp-no-spaces">No spaces configured yet.<br/><br/>Check back soon! 🌸</div>';
+    grid.innerHTML = '<div class="lp-no-spaces">No spaces configured yet.<br/><br/>Check back soon! 🌷</div>';
     return;
   }
 
@@ -132,7 +132,7 @@ function renderSpaces(spaces) {
     const players  = '<div class="room-card-players">👥 ' + (space.playersOnline || 0) + ' ' + (space.playersOnline === 1 ? 'person' : 'people') + ' in the space</div>';
     const bannerContent = space.creatorAvatar
       ? `<img src="${esc(space.creatorAvatar)}" alt="" class="room-banner-avatar" />`
-      : `<span class="room-banner-icon">🌸</span>`;
+      : `<span class="room-banner-icon">🌷</span>`;
     const enterBtn = isLive
       ? `<a href="${esc(space.roomPath)}" class="room-enter-btn" onclick="event.stopPropagation()">Enter Space →</a>`
       : `<a href="${esc(space.roomPath)}" class="room-enter-btn room-enter-offline" onclick="event.stopPropagation()">Enter Space (Offline)</a>`;
@@ -278,7 +278,7 @@ async function loadSpaces() {
     const data = await res.json();
     renderSpaces(data);
   } catch (e) {
-    if (grid) grid.innerHTML = '<div class="lp-no-spaces">Could not load spaces. Please try again. 🌸</div>';
+    if (grid) grid.innerHTML = '<div class="lp-no-spaces">Could not load spaces. Please try again. 🌷</div>';
   }
 }
 
