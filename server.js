@@ -3,7 +3,7 @@ const { createServer } = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
 const fs = require('fs');
-const https = require('https');
+// const https = require('https');
 
 const app = express();
 const DATA_PATH  = path.join(__dirname, 'data', 'tasks.json');
@@ -49,6 +49,11 @@ const httpServer = createServer(app);
 const io = new Server(httpServer);
 
 // ── Page routes ──────────────────────────────────────────
+
+app.get('/health', (req, res) => {
+  res.status(200).send('OK');
+});
+
 app.get('/',     (req, res) => res.sendFile(path.join(__dirname, 'public', 'landing.html')));
 app.get('/play', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -926,6 +931,6 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, "0.0.0.0", () => {
   console.log(`Study Space running → http://localhost:${PORT}`);
 });
