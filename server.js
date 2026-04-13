@@ -3,7 +3,7 @@ const { createServer } = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
 const fs = require('fs');
-// const https = require('https');
+const https = require('https');
 
 const app = express();
 const DATA_PATH  = path.join(__dirname, 'data', 'tasks.json');
@@ -181,18 +181,66 @@ async function getAppToken() {
 function _httpsPost(hostname, path, body) {
   return new Promise((resolve, reject) => {
     const buf = Buffer.from(body);
-    const req = https.request({ hostname, path, method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': buf.length } }, (res) => {
-      let d = ''; res.on('data', c => d += c); res.on('end', () => { try { resolve(JSON.parse(d)); } catch(e) { reject(e); } });
+    const req = https.request(
+      {
+        hostname,
+        path,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Length': buf.length
+        }
+      },
+      (res) => {
+        let d = '';
+        res.on('data', c => d += c);
+        res.on('end', () => {
+          try {
+            console.log('HTTPS POST response:', d); // 👈 ADD THIS
+            resolve(JSON.parse(d));
+          } catch (e) {
+            console.error('POST parse error:', d);
+            reject(e);
+          }
+        });
+      }
+    );
+    req.on('error', (err) => {
+      console.error('HTTPS POST error:', err); // 👈 ADD THIS
+      reject(err);
     });
-    req.on('error', reject); req.write(buf); req.end();
+    req.write(buf);
+    req.end();
   });
 }
 function _httpsGet(hostname, urlPath, headers) {
   return new Promise((resolve, reject) => {
-    const req = https.request({ hostname, path: urlPath, method: 'GET', headers }, (res) => {
-      let d = ''; res.on('data', c => d += c); res.on('end', () => { try { resolve({ status: res.statusCode, body: JSON.parse(d) }); } catch(e) { reject(e); } });
+    const req = https.request(
+      {
+        hostname,
+        path: urlPath,
+        method: 'GET',
+        headers
+      },
+      (res) => {
+        let d = '';
+        res.on('data', c => d += c);
+        res.on('end', () => {
+          try {
+            console.log('HTTPS GET response:', d); // 👈 ADD THIS
+            resolve({ status: res.statusCode, body: JSON.parse(d) });
+          } catch (e) {
+            console.error('GET parse error:', d);
+            reject(e);
+          }
+        });
+      }
+    );
+    req.on('error', (err) => {
+      console.error('HTTPS GET error:', err); // 👈 ADD THIS
+      reject(err);
     });
-    req.on('error', reject); req.end();
+    req.end();
   });
 }
 function twitchHeaders(token) {
