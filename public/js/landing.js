@@ -57,18 +57,27 @@ function _getSession() {
 }
 
 function _updateLandingHeader() {
-  const session = _getSession();
+  const session   = _getSession();
   const authArea  = document.getElementById('lp-auth-area');
   const heroAuth  = document.getElementById('lp-hero-auth');
-  const isSignedIn = session && session.authType !== 'guest';
+  const hasSession = !!session;
+  const isOAuth    = session && session.authType !== 'guest';
+  const isGuest    = session && session.authType === 'guest';
 
-  // Header pill: show name + sign-out when logged in with Twitch/Google
+  // Header pill — show for both OAuth and named guests
   if (authArea) {
-    if (isSignedIn) {
+    if (isOAuth) {
       authArea.innerHTML = `
         <div class="lp-user-pill">
           ${session.profilePic ? `<img src="${esc(session.profilePic)}" class="lp-user-avatar" alt="" />` : ''}
           <span class="lp-user-name">${esc(session.name)}</span>
+          <button class="lp-signout-btn" onclick="window._signOut()">Sign out</button>
+        </div>`;
+    } else if (isGuest && session.name) {
+      authArea.innerHTML = `
+        <div class="lp-user-pill lp-guest-pill">
+          <span class="lp-guest-icon">👤</span>
+          <span class="lp-user-name">${esc(session.name)} <span style="font-size:5px;color:#888">(guest)</span></span>
           <button class="lp-signout-btn" onclick="window._signOut()">Sign out</button>
         </div>`;
     } else {
@@ -76,9 +85,9 @@ function _updateLandingHeader() {
     }
   }
 
-  // Hero sign-in buttons: hide when already signed in with Twitch/Google
+  // Hero sign-in buttons: hide when already signed in (OAuth or guest)
   if (heroAuth) {
-    if (isSignedIn) {
+    if (hasSession) {
       heroAuth.classList.add('hidden');
     } else {
       heroAuth.classList.remove('hidden');
@@ -89,7 +98,19 @@ function _updateLandingHeader() {
 window._signOut = function() {
   localStorage.removeItem('cc_session');
   _updateLandingHeader();
+  // Broadcast sign-out so other landing-page tabs also update
+  try { new BroadcastChannel('cc_landing_tab').postMessage({ type: 'signOut' }); } catch(e) {}
 };
+
+
+// ── Landing-page tab enforcement (all auth types inc. guests) ──
+(function _landingTabGuard() {
+  const ch = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('cc_landing_tab') : null;
+  if (!ch) return;
+  ch.onmessage = (e) => {
+    if (e.data?.type === 'signOut') { _updateLandingHeader(); }
+  };
+})();
 
 // ── Star canvas ────────────────────────────────────────────
 (function () {
@@ -338,8 +359,21 @@ function _showAppearancePrompt(targetPath) {
 /**
  * Step 2 (Guest path) — Name + appearance picker.
  * Saves guest session and stays on landing page (no navigation).
+ * If a session already exists (from another tab or earlier visit), don't re-prompt.
  */
 function _showGuestNamePrompt(targetPath) {
+  // Block creating a second identity if any session (guest or OAuth) already active
+  const existing = _getSession();
+  if (existing && existing.name) {
+    // Already have an identity — just enter the space if a path was given
+    if (existing.gender && existing.shirtColor) {
+      if (targetPath) window.location.href = targetPath;
+      else document.getElementById('spaces-grid')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else {
+      _showAppearancePrompt(targetPath);
+    }
+    return;
+  }
   document.getElementById('guest-name-modal')?.remove();
   const modal = document.createElement('div');
   modal.id = 'guest-name-modal';

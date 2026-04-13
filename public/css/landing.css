@@ -475,7 +475,14 @@ body { min-height: 100%; background: var(--bg); color: var(--text); font-family:
 }
 .lp-google-signin-btn:hover { background: #2b6fe0; }
 
-/* ── Landing page user pill (signed-in state) ────────────── */
+/* ── Landing page user pill (signed-in / guest state) ───── */
+.lp-guest-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+.lp-guest-pill .lp-user-name {
+  color: #aaa;
+}
 .lp-user-pill {
   display: flex;
   align-items: center;
