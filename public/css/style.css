@@ -397,8 +397,8 @@ html, body {
   z-index: 100;
 }
 
-.modal-overlay.hidden { display: none; }
 .modal-overlay.active { display: flex; }
+.modal-overlay.hidden { display: none !important; }
 
 .modal-box {
   background: #13131f;

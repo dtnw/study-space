@@ -338,7 +338,9 @@
         if (session.gender)     sessionStorage.setItem('studyspace_gender',     session.gender);
         if (session.shirtColor) sessionStorage.setItem('studyspace_shirtColor', session.shirtColor);
         // Hide the modal immediately so there's no flash before auto-join fires
-        document.getElementById('name-modal')?.classList.add('hidden');
+        const _nm = document.getElementById('name-modal');
+        _nm?.classList.add('hidden');
+        _nm?.classList.remove('active');
       }
       return;
     }
@@ -447,8 +449,8 @@
     startPhaser();
     // Restore timer if it was running before the refresh
     window.PomodoroManager?.restore();
-    // Show blocked list immediately from sessionStorage
-    _renderBlockedList();
+    // Defer blocked list render — _blockedIds is declared later in the IIFE
+    setTimeout(() => _renderBlockedList(), 0);
   }
 
   joinBtn.addEventListener('click', () => { SoundManager.play('click'); joinGame(); });
@@ -536,7 +538,7 @@
 
   // ── Pomodoro modal ─────────────────────────────────────────
   document.getElementById('start-pomo-btn').addEventListener('click', () => {
-    SoundManager.play('click');
+    try { SoundManager.play('click'); } catch(e) {}
     const focusMin    = parseInt(document.getElementById('focus-input').value, 10) || 0;
     const breakMin    = parseInt(document.getElementById('break-input').value, 10) || 0;
     const autoNext    = document.getElementById('auto-next-cb').checked;
@@ -546,23 +548,19 @@
   });
 
   document.getElementById('skip-pomo-btn').addEventListener('click', () => {
-    SoundManager.play('click');
+    try { SoundManager.play('click'); } catch(e) {}
     hidePomodoroModal();
-    // Just sitting — no timer, no status icon
     const si = document.getElementById('status-indicator');
-    si.textContent = '● AT DESK';
-    si.className = 'status-idle';
+    if (si) { si.textContent = '● AT DESK'; si.className = 'status-idle'; }
     if (window.gameScene) window.gameScene.setStatusIcon(null);
   });
 
   // X button: stay seated without starting timer
   document.getElementById('close-pomo-modal-btn').addEventListener('click', () => {
-    SoundManager.play('click');
+    try { SoundManager.play('click'); } catch(e) {}
     hidePomodoroModal();
-    // Just sitting — no timer, no status icon
     const si = document.getElementById('status-indicator');
-    si.textContent = '● AT DESK';
-    si.className = 'status-idle';
+    if (si) { si.textContent = '● AT DESK'; si.className = 'status-idle'; }
     if (window.gameScene) window.gameScene.setStatusIcon(null);
   });
 
