@@ -288,13 +288,36 @@
   });
 
   // ── Role events ───────────────────────────────────────────
+  // Ensure DIY button is hidden on load — only shown if server confirms 'creator' role
+  document.getElementById('diy-creator-toggle')?.classList.add('hidden');
+
   socket.on('yourRole', ({ role }) => {
-    window.myRole = role;
+    // Client-side guard: guests and users whose twitchLogin isn't the owner
+    // can never be creator, even if server somehow says so
+    let effectiveRole = role;
+    const _sess = window._ccSession;
+    if (effectiveRole === 'creator') {
+      const isGuest = !_sess || _sess.authType === 'guest';
+      const tl = (_sess?.twitchLogin || '').toLowerCase().trim();
+      if (isGuest || !tl) {
+        effectiveRole = 'regular';
+      }
+    }
+
+    window.myRole = effectiveRole;
     // Show/hide privileged UI
-    document.getElementById('clear-tasks-btn')?.classList.toggle('hidden', role === 'regular');
-    if (role !== 'regular') window.socket?.emit('getBannedList');
+    document.getElementById('clear-tasks-btn')?.classList.toggle('hidden', effectiveRole === 'regular');
+    if (effectiveRole !== 'regular') window.socket?.emit('getBannedList');
     window._refreshSpacesPanel?.();
-    document.getElementById('diy-creator-toggle')?.classList.toggle('hidden', role !== 'creator');
+    // DIY button: explicitly add hidden for non-creator, remove only for confirmed creator
+    const diyBtn = document.getElementById('diy-creator-toggle');
+    if (diyBtn) {
+      if (effectiveRole === 'creator') {
+        diyBtn.classList.remove('hidden');
+      } else {
+        diyBtn.classList.add('hidden');
+      }
+    }
   });
 
   socket.on('playerRoleUpdated', ({ id, role }) => {
@@ -398,16 +421,16 @@
     // Restore avatar choices saved on last join
     if (session.gender)     sessionStorage.setItem('studyspace_gender',     session.gender);
     if (session.shirtColor) sessionStorage.setItem('studyspace_shirtColor', session.shirtColor);
-    // If appearance already chosen, auto-join without showing the modal
+    // If appearance already chosen, auto-join silently — modal stays hidden
     if (session.gender && session.shirtColor) {
-      const _nm = document.getElementById('name-modal');
-      _nm?.classList.add('hidden');
-      _nm?.classList.remove('active');
-      // _suppressAutoJoin stays false → auto-rejoin logic fires
+      // _suppressAutoJoin stays false → auto-rejoin fires, modal never appears
       return;
     }
-    // First time or missing appearance — show WELCOME BACK modal so they can pick
+    // First time (no saved appearance) — show the welcome modal so they can pick a look
     window._suppressAutoJoin = true;
+    const _nm = document.getElementById('name-modal');
+    _nm?.classList.remove('hidden');
+    _nm?.classList.add('active');
     document.getElementById('nm-guest-state')?.classList.add('hidden');
     const ts = document.getElementById('nm-twitch-state');
     if (ts) ts.classList.remove('hidden');
@@ -1293,19 +1316,8 @@
       link.classList.toggle('hidden', !status.twitchLogin);
       if (status.twitchLogin) link.href = 'https://twitch.tv/' + status.twitchLogin;
     }
-    // live status dot in header (show small live indicator next to logo)
-    let liveBadge = document.getElementById('header-live-badge');
-    if (status.live) {
-      if (!liveBadge) {
-        liveBadge = document.createElement('span');
-        liveBadge.id = 'header-live-badge';
-        liveBadge.className = 'header-live-badge';
-        liveBadge.textContent = '🔴 LIVE';
-        document.getElementById('header-left')?.appendChild(liveBadge);
-      }
-    } else {
-      liveBadge?.remove();
-    }
+    // Remove any old header-live-badge elements (legacy)
+    document.getElementById('header-live-badge')?.remove();
   }
   window._updateSpacePanel = _updateSpacePanel;
 

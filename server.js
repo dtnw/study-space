@@ -41,7 +41,8 @@ let rolesData = loadRoles();
 
 function getRoleFor(clientId) {
   if (!clientId) return 'regular';
-  if (clientId === rolesData.creatorClientId) return 'creator';
+  // Creator role is ONLY granted via twitchLogin match in playerJoin — never from a stored clientId.
+  // This prevents stale roles.json entries from giving non-owners creator privileges.
   if (rolesData.modClientIds.includes(clientId)) return 'mod';
   return 'regular';
 }

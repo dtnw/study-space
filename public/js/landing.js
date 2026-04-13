@@ -25,6 +25,24 @@
       expiresAt:   Date.now() + 7 * 24 * 60 * 60 * 1000,
     }));
     _updateLandingHeader();
+
+    // After OAuth, check if we need to show appearance picker
+    const session = _getSession();
+    const pendingRoom = sessionStorage.getItem('cc_pending_room');
+    if (session && (!session.gender || !session.shirtColor)) {
+      // New OAuth user — needs to pick appearance before entering
+      if (pendingRoom) {
+        sessionStorage.removeItem('cc_pending_room');
+        _showAppearancePrompt(pendingRoom);
+      } else {
+        // No pending room — still show appearance picker so it's ready for later
+        _showAppearancePrompt(null);
+      }
+    } else if (pendingRoom) {
+      // Already has appearance, just navigate
+      sessionStorage.removeItem('cc_pending_room');
+      window.location.href = pendingRoom;
+    }
   } catch(e) {}
 })();
 
@@ -156,43 +174,157 @@ function renderSpaces(spaces) {
   }).join('');
 }
 
+/**
+ * enterSpace — called when user clicks a room card.
+ * Sequential flow:
+ *   1. No session → sign-in prompt
+ *   2. Has session but no appearance → appearance prompt
+ *   3. All set → navigate
+ */
 function enterSpace(path) {
   const session = _getSession();
   if (!session) {
-    // Not signed in — show sign-in prompt modal
     _showSignInPrompt(path);
+    return;
+  }
+  if (!session.gender || !session.shirtColor) {
+    _showAppearancePrompt(path);
     return;
   }
   window.location.href = path;
 }
 
+/**
+ * Step 1 — Sign-in method selection.
+ * Twitch/Google save targetPath to sessionStorage then redirect to OAuth.
+ * Guest proceeds directly to appearance prompt.
+ */
 function _showSignInPrompt(targetPath) {
-  let modal = document.getElementById('signin-prompt-modal');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'signin-prompt-modal';
-    modal.className = 'lp-modal-overlay';
-    modal.innerHTML = `
-      <div class="lp-modal-box signin-prompt-box">
-        <h2 class="lp-modal-title">JOIN THE SPACE</h2>
-        <p class="lp-modal-sub">Sign in to save your coins, tasks, and friends.</p>
-        <a href="/auth/twitch?role=player" class="lp-twitch-signin-btn" style="display:block;text-align:center;margin-bottom:10px">🟣 Sign in with Twitch</a>
-        <a href="/auth/google" class="lp-google-signin-btn" style="display:block;text-align:center;margin-bottom:16px">🔵 Sign in with Google</a>
-        <div style="text-align:center">
-          <a href="#" class="lp-guest-link" id="signin-guest-link">Continue as guest →</a>
-        </div>
-      </div>`;
-    document.body.appendChild(modal);
-    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
-  }
-  modal.classList.remove('hidden');
-  document.getElementById('signin-guest-link')?.addEventListener('click', (e) => {
+  // Remove any existing modal
+  document.getElementById('signin-prompt-modal')?.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'signin-prompt-modal';
+  modal.className = 'lp-modal-overlay';
+  modal.innerHTML = `
+    <div class="lp-modal-box signin-prompt-box">
+      <h2 class="lp-modal-title">JOIN THE SPACE</h2>
+      <p class="lp-modal-sub">Sign in to save your coins, tasks, and friends.</p>
+      <button class="lp-twitch-signin-btn" id="sp-twitch-btn" style="display:block;width:100%;text-align:center;margin-bottom:10px;border:none;cursor:pointer;font-family:var(--font)">🟣 Sign in with Twitch</button>
+      <button class="lp-google-signin-btn" id="sp-google-btn" style="display:block;width:100%;text-align:center;margin-bottom:16px;border:none;cursor:pointer;font-family:var(--font)">🔵 Sign in with Google</button>
+      <div style="text-align:center">
+        <a href="#" class="lp-guest-link" id="sp-guest-link">Continue as guest →</a>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+
+  modal.querySelector('#sp-twitch-btn')?.addEventListener('click', () => {
+    modal.remove();
+    _startOAuthSignIn('twitch', targetPath);
+  });
+  modal.querySelector('#sp-google-btn')?.addEventListener('click', () => {
+    modal.remove();
+    _startOAuthSignIn('google', targetPath);
+  });
+  modal.querySelector('#sp-guest-link')?.addEventListener('click', (e) => {
     e.preventDefault();
     modal.remove();
     _showGuestNamePrompt(targetPath);
   });
 }
 
+/**
+ * Saves targetPath to sessionStorage and redirects to OAuth provider.
+ * After OAuth completes and psid is consumed, _consumePsid will auto-show
+ * the appearance prompt using the saved path.
+ */
+function _startOAuthSignIn(provider, targetPath) {
+  if (targetPath) {
+    sessionStorage.setItem('cc_pending_room', targetPath);
+  }
+  if (provider === 'twitch') {
+    window.location.href = '/auth/twitch?role=player';
+  } else {
+    window.location.href = '/auth/google';
+  }
+}
+
+/**
+ * Step 2 (OAuth path) — Appearance picker for Twitch/Google users.
+ * Name comes from OAuth so only gender + color are needed.
+ * On save: updates cc_session, then navigates to targetPath (or stays if null).
+ */
+function _showAppearancePrompt(targetPath) {
+  document.getElementById('appearance-prompt-modal')?.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'appearance-prompt-modal';
+  modal.className = 'lp-modal-overlay';
+  modal.innerHTML = `
+    <div class="lp-modal-box signin-prompt-box">
+      <h2 class="lp-modal-title">CUSTOMISE YOUR AVATAR</h2>
+      <p class="lp-modal-sub">Pick a look before you enter the space.</p>
+
+      <div class="lp-avatar-pick-row">
+        <button class="lp-gender-btn active" data-gender="male">BOY</button>
+        <button class="lp-gender-btn" data-gender="female">GIRL</button>
+      </div>
+      <div class="lp-color-pick-row">
+        <button class="lp-color-swatch active" data-color="blue"   style="background:#5b8fe0" title="Blue"></button>
+        <button class="lp-color-swatch"        data-color="red"    style="background:#e05b5b" title="Red"></button>
+        <button class="lp-color-swatch"        data-color="green"  style="background:#5be05b" title="Green"></button>
+        <button class="lp-color-swatch"        data-color="purple" style="background:#9b5be0" title="Purple"></button>
+      </div>
+
+      <button id="appearance-save-btn" class="lp-twitch-signin-btn" style="display:block;width:100%;margin-top:16px;border:none;cursor:pointer;font-family:var(--font)">✔ Save My Look${targetPath ? ' & Enter Space' : ''}</button>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+
+  let selectedGender = 'male';
+  let selectedColor  = 'blue';
+
+  modal.querySelectorAll('.lp-gender-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      modal.querySelectorAll('.lp-gender-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      selectedGender = btn.dataset.gender;
+    });
+  });
+  modal.querySelectorAll('.lp-color-swatch').forEach(sw => {
+    sw.addEventListener('click', () => {
+      modal.querySelectorAll('.lp-color-swatch').forEach(b => b.classList.remove('active'));
+      sw.classList.add('active');
+      selectedColor = sw.dataset.color;
+    });
+  });
+
+  modal.querySelector('#appearance-save-btn')?.addEventListener('click', () => {
+    const raw = localStorage.getItem('cc_session');
+    if (raw) {
+      try {
+        const sess = JSON.parse(raw);
+        sess.gender = selectedGender;
+        sess.shirtColor = selectedColor;
+        localStorage.setItem('cc_session', JSON.stringify(sess));
+      } catch(e) {}
+    }
+    modal.remove();
+    if (targetPath) {
+      window.location.href = targetPath;
+    } else {
+      // No target path — just update header and scroll to spaces
+      _updateLandingHeader();
+      document.getElementById('spaces-grid')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  });
+}
+
+/**
+ * Step 2 (Guest path) — Name + appearance picker.
+ * Saves guest session and stays on landing page (no navigation).
+ */
 function _showGuestNamePrompt(targetPath) {
   document.getElementById('guest-name-modal')?.remove();
   const modal = document.createElement('div');
@@ -216,7 +348,7 @@ function _showGuestNamePrompt(targetPath) {
 
       <input type="text" id="guest-name-input" class="lp-name-input" placeholder="Enter your name…" maxlength="20" autocomplete="off" />
       <p id="guest-name-error" style="color:#ff6b6b;font-size:7px;min-height:14px;margin:4px 0 0;text-align:left"></p>
-      <button id="guest-name-submit" class="lp-twitch-signin-btn" style="display:block;width:100%;margin-top:8px;border:none;cursor:pointer;font-family:var(--font)">Enter Space →</button>
+      <button id="guest-name-submit" class="lp-twitch-signin-btn" style="display:block;width:100%;margin-top:8px;border:none;cursor:pointer;font-family:var(--font)">✔ Save My Look</button>
       <div style="text-align:center;margin-top:12px">
         <a href="#" id="guest-back-to-signin" class="lp-guest-link">← Back to sign in options</a>
       </div>
@@ -250,13 +382,16 @@ function _showGuestNamePrompt(targetPath) {
   function doEnter() {
     const name = input?.value.trim();
     if (!name) { if (errEl) errEl.textContent = 'Please enter a name!'; input?.focus(); return; }
-    modal.remove();
+    // Save guest session — stay on landing so they can click the room card themselves
     localStorage.setItem('cc_session', JSON.stringify({
       name, twitchLogin: null, googleEmail: null, profilePic: null,
       authType: 'guest', gender: selectedGender, shirtColor: selectedColor,
       expiresAt: Date.now() + 24 * 60 * 60 * 1000,
     }));
-    window.location.href = targetPath;
+    _updateLandingHeader();
+    modal.remove();
+    // Scroll room cards into view so user can click to enter
+    document.getElementById('spaces-grid')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
   submit?.addEventListener('click', doEnter);
   input?.addEventListener('keydown', (e) => { if (e.key === 'Enter') doEnter(); });
