@@ -1,3 +1,8 @@
+/* ── Global hidden utility ─────────────────────────────── */
+/* Any element with class="hidden" is invisible. More-specific rules
+   (e.g. .modal-overlay.active) naturally override this via CSS specificity. */
+.hidden { display: none !important; }
+
 /* ── Reset & Base ──────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 

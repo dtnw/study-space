@@ -58,17 +58,31 @@ function _getSession() {
 
 function _updateLandingHeader() {
   const session = _getSession();
-  const authArea = document.getElementById('lp-auth-area');
-  if (!authArea) return;
-  if (session && session.authType !== 'guest') {
-    authArea.innerHTML = `
-      <div class="lp-user-pill">
-        ${session.profilePic ? `<img src="${esc(session.profilePic)}" class="lp-user-avatar" alt="" />` : ''}
-        <span class="lp-user-name">${esc(session.name)}</span>
-        <button class="lp-signout-btn" onclick="window._signOut()">Sign out</button>
-      </div>`;
-  } else {
-    authArea.innerHTML = '';
+  const authArea  = document.getElementById('lp-auth-area');
+  const heroAuth  = document.getElementById('lp-hero-auth');
+  const isSignedIn = session && session.authType !== 'guest';
+
+  // Header pill: show name + sign-out when logged in with Twitch/Google
+  if (authArea) {
+    if (isSignedIn) {
+      authArea.innerHTML = `
+        <div class="lp-user-pill">
+          ${session.profilePic ? `<img src="${esc(session.profilePic)}" class="lp-user-avatar" alt="" />` : ''}
+          <span class="lp-user-name">${esc(session.name)}</span>
+          <button class="lp-signout-btn" onclick="window._signOut()">Sign out</button>
+        </div>`;
+    } else {
+      authArea.innerHTML = '';
+    }
+  }
+
+  // Hero sign-in buttons: hide when already signed in with Twitch/Google
+  if (heroAuth) {
+    if (isSignedIn) {
+      heroAuth.classList.add('hidden');
+    } else {
+      heroAuth.classList.remove('hidden');
+    }
   }
 }
 

@@ -28,7 +28,7 @@
     const raw = localStorage.getItem('cc_session');
     if (!raw) return;
     let session; try { session = JSON.parse(raw); } catch(e) { return; }
-    if (!session || session.authType === 'guest') return;
+    if (!session) return;
     // Claim this tab
     function _claimTab() {
       localStorage.setItem('cc_active_game_tab', JSON.stringify({ tabId: _myTabId, user: session.name, ts: Date.now() }));
@@ -617,12 +617,50 @@
 
   // ── Logout ─────────────────────────────────────────────────
   document.getElementById('logout-btn')?.addEventListener('click', () => {
+    if (_isGuest()) {
+      _showGuestSavePrompt();
+      return;
+    }
     if (!confirm('Log out and return to the welcome screen?')) return;
     window.socket?.disconnect();
     sessionStorage.clear();
     localStorage.removeItem('cc_session');
     window.location.href = '/';
   });
+
+  function _showGuestSavePrompt() {
+    let modal = document.getElementById('guest-save-prompt-modal');
+    if (modal) { modal.classList.remove('hidden'); return; }
+    modal = document.createElement('div');
+    modal.id = 'guest-save-prompt-modal';
+    modal.className = 'modal-overlay active';
+    modal.innerHTML = `
+      <div class="modal-box" style="max-width:320px;text-align:center">
+        <div style="font-size:22px;margin-bottom:10px">🌷</div>
+        <h2 class="modal-title" style="font-size:9px;margin-bottom:8px">SAVE YOUR PROGRESS?</h2>
+        <p style="font-size:6px;color:#aaa;line-height:2;margin-bottom:16px">
+          Sign in to keep your coins, tasks, and friends across sessions.
+        </p>
+        <a href="/auth/twitch?role=player" class="pixel-btn nm-twitch-signin" style="display:block;text-align:center;margin-bottom:8px;text-decoration:none">🟣 Sign in with Twitch</a>
+        <a href="/auth/google" class="pixel-btn nm-google-signin" style="display:block;text-align:center;margin-bottom:16px;text-decoration:none">🔵 Sign in with Google</a>
+        <div style="display:flex;gap:8px;justify-content:center">
+          <button id="guest-save-signout-btn" class="pixel-btn small danger" style="font-size:6px">Sign out anyway</button>
+          <button id="guest-save-cancel-btn" class="pixel-btn small" style="font-size:6px">Stay</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.querySelector('#guest-save-signout-btn')?.addEventListener('click', () => {
+      modal.remove();
+      window.socket?.disconnect();
+      sessionStorage.clear();
+      localStorage.removeItem('cc_session');
+      window.location.href = '/';
+    });
+    modal.querySelector('#guest-save-cancel-btn')?.addEventListener('click', () => {
+      modal.remove();
+    });
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+  }
 
   // ── Change Appearance ──────────────────────────────────────
   document.getElementById('change-appearance-btn')?.addEventListener('click', () => {
