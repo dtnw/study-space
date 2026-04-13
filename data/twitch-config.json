@@ -2,5 +2,6 @@
   "_instructions": "Register your app at https://dev.twitch.tv/console — add http://localhost:3000/auth/twitch/callback as a redirect URI",
   "clientId": "fxqfxb53bn48lhba6t8bt3bpi0o2h3",
   "clientSecret": "r5dfve4346jgu4k7mbxnh0x41bp7tp",
-  "redirectUri": "https://study-space-production.up.railway.app/auth/twitch/callback"
+  "redirectUri": "https://study-space-production.up.railway.app/auth/twitch/callback",
+  "creatorLogin": "derbysaren"
 }

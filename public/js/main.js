@@ -294,6 +294,26 @@
     _renderMembersList();
   });
 
+  // ── Room DIY layout sync ───────────────────────────────
+  socket.on('roomLayout', (layout) => {
+    if (!Array.isArray(layout)) return;
+    if (window.gameScene) {
+      window.gameScene._applyRoomLayout(layout);
+    } else {
+      // Phaser not ready yet — apply once scene loads
+      window._pendingRoomLayout = layout;
+    }
+  });
+
+  // ── Appearance update from another player ─────────────
+  socket.on('playerAppearanceUpdated', ({ id, gender, shirtColor }) => {
+    if (window._allPlayers[id]) {
+      window._allPlayers[id].gender     = gender;
+      window._allPlayers[id].shirtColor = shirtColor;
+    }
+    window.gameScene?._updateOtherAppearance(id, gender, shirtColor);
+  });
+
   socket.on('playerStatusIconUpdated', ({ id, type }) => {
     if (window._allPlayers[id]) window._allPlayers[id].statusIcon = type;
     window.gameScene?._setOtherStatusIcon(id, type);
@@ -367,6 +387,9 @@
     const nameInputEl = document.getElementById('name-input');
     if (nameInputEl && session.name) { nameInputEl.value = session.name; window._suppressAutoJoin = true; }
     sessionStorage.setItem('studyspace_name', session.name || '');
+    // Restore avatar choices saved on last join
+    if (session.gender)     sessionStorage.setItem('studyspace_gender',     session.gender);
+    if (session.shirtColor) sessionStorage.setItem('studyspace_shirtColor', session.shirtColor);
     // Show Twitch/Google welcome state
     document.getElementById('nm-guest-state')?.classList.add('hidden');
     const ts = document.getElementById('nm-twitch-state');
@@ -460,7 +483,19 @@
     const startX = isFinite(savedX) ? savedX : undefined;
     const startY = isFinite(savedY) ? savedY : undefined;
 
-    socket.emit('playerJoin', { name, gender: _selectedGender, shirtColor: _selectedShirtColor, clientId: window._clientId, startX, startY });
+    // Persist avatar choices back to cc_session so next visit remembers them (OAuth + guest)
+    try {
+      const _raw = localStorage.getItem('cc_session');
+      if (_raw) {
+        const _sess = JSON.parse(_raw);
+        _sess.gender     = _selectedGender;
+        _sess.shirtColor = _selectedShirtColor;
+        localStorage.setItem('cc_session', JSON.stringify(_sess));
+      }
+    } catch(_) {}
+
+    const _twitchLogin = window._ccSession?.twitchLogin || null;
+    socket.emit('playerJoin', { name, gender: _selectedGender, shirtColor: _selectedShirtColor, clientId: window._clientId, twitchLogin: _twitchLogin, startX, startY });
 
     nameModal.classList.remove('active');
     nameModal.classList.add('hidden');
@@ -546,6 +581,61 @@
     window.socket?.disconnect();
     sessionStorage.clear();
     localStorage.removeItem('cc_session');
+    window.location.reload();
+  });
+
+  // ── Change Appearance ──────────────────────────────────────
+  document.getElementById('change-appearance-btn')?.addEventListener('click', () => {
+    try { SoundManager.play('click'); } catch(e) {}
+    // Pre-fill with current choices
+    const curGender = sessionStorage.getItem('studyspace_gender') || 'male';
+    const curColor  = sessionStorage.getItem('studyspace_shirtColor') || 'blue';
+    document.querySelectorAll('.ca-gender-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.gender === curGender);
+    });
+    document.querySelectorAll('.ca-color-swatch').forEach(s => {
+      s.classList.toggle('active', s.dataset.color === curColor);
+    });
+    document.getElementById('change-appearance-modal')?.classList.remove('hidden');
+  });
+  document.getElementById('ca-cancel-btn')?.addEventListener('click', () => {
+    document.getElementById('change-appearance-modal')?.classList.add('hidden');
+  });
+  document.getElementById('change-appearance-modal')?.addEventListener('click', (e) => {
+    if (e.target === document.getElementById('change-appearance-modal'))
+      document.getElementById('change-appearance-modal').classList.add('hidden');
+  });
+  document.querySelectorAll('.ca-gender-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.ca-gender-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  });
+  document.querySelectorAll('.ca-color-swatch').forEach(sw => {
+    sw.addEventListener('click', () => {
+      document.querySelectorAll('.ca-color-swatch').forEach(b => b.classList.remove('active'));
+      sw.classList.add('active');
+    });
+  });
+  document.getElementById('ca-save-btn')?.addEventListener('click', () => {
+    const newGender = document.querySelector('.ca-gender-btn.active')?.dataset.gender || 'male';
+    const newColor  = document.querySelector('.ca-color-swatch.active')?.dataset.color || 'blue';
+    // Save to sessionStorage (picked up on auto-rejoin)
+    sessionStorage.setItem('studyspace_gender',     newGender);
+    sessionStorage.setItem('studyspace_shirtColor', newColor);
+    // Save to localStorage cc_session so it persists
+    try {
+      const _raw = localStorage.getItem('cc_session');
+      if (_raw) {
+        const _sess = JSON.parse(_raw);
+        _sess.gender = newGender; _sess.shirtColor = newColor;
+        localStorage.setItem('cc_session', JSON.stringify(_sess));
+      }
+    } catch(_) {}
+    // Tell server (so other players see the change immediately)
+    window.socket?.emit('updateAppearance', { gender: newGender, shirtColor: newColor });
+    // Apply locally — simplest reliable approach is to reload the game scene
+    document.getElementById('change-appearance-modal')?.classList.add('hidden');
     window.location.reload();
   });
 

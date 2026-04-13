@@ -161,6 +161,8 @@ function saveSubscriptions(subs) {
   try { fs.mkdirSync(path.dirname(SUBSCRIPTIONS_PATH), { recursive: true }); fs.writeFileSync(SUBSCRIPTIONS_PATH, JSON.stringify(subs, null, 2)); } catch(e) {}
 }
 let spaceStatus = { live: false, twitchUser: null, twitchLogin: null, streamTitle: null, viewerCount: 0, gameName: null };
+let creatorProfileImage = null;  // cached from /helix/users
+let roomLayout = null;           // server-side DIY layout; updated by creator, broadcast to all
 
 // ── App access token (client credentials, no user sign-in needed) ──
 let _appToken = { accessToken: null, expiresAt: 0 };
@@ -255,17 +257,35 @@ async function refreshTwitchToken() {
   } catch(e) {}
   return false;
 }
+async function getCreatorProfile() {
+  const login = twitchCfg.creatorLogin || twitchToken?.twitchLogin;
+  if (!login || !twitchCfg.clientId) return;
+  try {
+    const appTok = await getAppToken();
+    if (!appTok) return;
+    const r = await _httpsGet('api.twitch.tv', `/helix/users?login=${login}`, twitchHeaders(appTok));
+    const user = r.body?.data?.[0];
+    if (user?.profile_image_url) {
+      creatorProfileImage = user.profile_image_url;
+      console.log('Creator profile image fetched:', creatorProfileImage);
+    }
+  } catch(e) { console.warn('getCreatorProfile failed:', e.message); }
+}
+
 async function checkLiveStatus() {
   // Determine which login to check — prefer connected creator, fall back to config
-  const loginToCheck = twitchToken?.twitchLogin || twitchCfg.creatorLogin || null;
+  const loginToCheck = twitchCfg.creatorLogin || twitchToken?.twitchLogin || null;
   if (!loginToCheck || !twitchCfg.clientId) return;
   try {
     // Use app access token (client credentials) — never expires due to user re-auth
     const appTok = await getAppToken();
     if (!appTok) return;
+    // Fetch stream status
     const r = await _httpsGet('api.twitch.tv', `/helix/streams?user_login=${loginToCheck}`, twitchHeaders(appTok));
     if (r.status === 401) { _appToken = { accessToken: null, expiresAt: 0 }; return; } // will refresh next cycle
     const stream = r.body?.data?.[0];
+    // Also refresh creator profile image if not yet set
+    if (!creatorProfileImage) await getCreatorProfile();
     spaceStatus = {
       live:        !!stream,
       twitchUser:  twitchToken?.twitchDisplayName || twitchToken?.twitchLogin || loginToCheck,
@@ -274,11 +294,14 @@ async function checkLiveStatus() {
       viewerCount: stream?.viewer_count || 0,
       gameName:    stream?.game_name || null,
     };
+    console.log('Live status updated:', spaceStatus.live, 'login:', loginToCheck);
     io.emit('spaceStatus', spaceStatus);
   } catch(e) { console.warn('Twitch check failed:', e.message); }
 }
 setInterval(checkLiveStatus, 60000);
 checkLiveStatus();
+// Fetch creator profile image on startup (separate from live check)
+getCreatorProfile();
 
 setInterval(() => {
   const now = Date.now();
@@ -399,7 +422,7 @@ app.get('/api/spaces', (req, res) => {
     gameName:      spaceStatus.gameName,
     twitchUser:    spaceStatus.twitchUser,
     playersOnline: Object.keys(players).length,
-    creatorAvatar: twitchToken?.profileImageUrl || null,
+    creatorAvatar: creatorProfileImage || twitchToken?.profileImageUrl || null,
   }];
   spaces.sort((a, b) => {
     const sA = (a.live ? 100000 : 0) + (a.viewerCount * 100) + (a.playersOnline * 50);
@@ -480,9 +503,11 @@ io.on('connection', (socket) => {
   // Send current state to new player
   socket.emit('init', { tasks: globalTasks });
   socket.emit('spaceStatus', spaceStatus);
+  // Send current room DIY layout to new player (if any has been saved)
+  if (roomLayout) socket.emit('roomLayout', roomLayout);
 
   // ── Player join ──────────────────────────────────────────
-  socket.on('playerJoin', ({ name, gender, shirtColor, clientId, startX, startY }) => {
+  socket.on('playerJoin', ({ name, gender, shirtColor, clientId, twitchLogin, startX, startY }) => {
     if (players[socket.id]) return; // already joined — ignore duplicate
     const safeName = sanitise(name, 24);
     if (!safeName) return socket.disconnect();
@@ -506,21 +531,26 @@ io.on('connection', (socket) => {
     }
     if (safeClientId) clientIdMap[safeClientId] = socket.id;
 
-    // "admin" is always the creator regardless of join order
-    if (safeName.toLowerCase() === 'admin' && safeClientId) {
-      rolesData.creatorClientId = safeClientId;
-      saveRoles();
-    } else if (!rolesData.creatorClientId && safeClientId) {
-      // First non-admin player becomes creator only if no creator exists yet
-      rolesData.creatorClientId = safeClientId;
-      saveRoles();
+    const safeTwitchLogin = typeof twitchLogin === 'string' ? twitchLogin.toLowerCase().trim() : null;
+
+    // Creator role: twitchLogin matching config takes absolute priority
+    let role;
+    if (safeTwitchLogin && twitchCfg.creatorLogin &&
+        safeTwitchLogin === twitchCfg.creatorLogin.toLowerCase()) {
+      // This is the room owner — always creator regardless of rolesData
+      role = 'creator';
+      if (safeClientId && rolesData.creatorClientId !== safeClientId) {
+        rolesData.creatorClientId = safeClientId;
+        saveRoles();
+      }
+    } else {
+      role = getRoleFor(safeClientId);
     }
 
     const safeColor  = ['blue','red','green','purple'].includes(shirtColor) ? shirtColor : 'blue';
     const safeGender = gender === 'female' ? 'female' : 'male';
     const sx = (typeof startX === 'number' && startX >= 32 && startX <= 1068) ? Math.round(startX) : 400;
     const sy = (typeof startY === 'number' && startY >= 32 && startY <= 764)  ? Math.round(startY) : 560;
-    const role = getRoleFor(safeClientId);
 
     players[socket.id] = {
       id: socket.id,
@@ -831,6 +861,27 @@ io.on('connection', (socket) => {
     const me = players[socket.id];
     if (!me || (me.role !== 'creator' && me.role !== 'mod')) return;
     socket.emit('bannedListUpdated', { bannedList: rolesData.bannedClientIds });
+  });
+
+  // ── DIY layout sync (creator only) ─────────────────────
+  socket.on('saveDIYLayout', ({ items }) => {
+    const me = players[socket.id];
+    if (!me || me.role !== 'creator') return;
+    if (!Array.isArray(items)) return;
+    roomLayout = items;
+    // Broadcast to all OTHER players so they see the updated room
+    socket.broadcast.emit('roomLayout', roomLayout);
+  });
+
+  // ── Appearance update ───────────────────────────────────
+  socket.on('updateAppearance', ({ gender, shirtColor }) => {
+    const p = players[socket.id];
+    if (!p) return;
+    const safeGender = gender === 'female' ? 'female' : 'male';
+    const safeColor  = ['blue','red','green','purple'].includes(shirtColor) ? shirtColor : 'blue';
+    p.gender = safeGender;
+    p.shirtColor = safeColor;
+    socket.broadcast.emit('playerAppearanceUpdated', { id: socket.id, gender: safeGender, shirtColor: safeColor });
   });
 
   // ── Clear all shared tasks ──────────────────────────────

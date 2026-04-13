@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/landing.css" />
 </head>
 <body>
 
@@ -40,9 +41,32 @@
           </div>
         </div>
         <span id="player-name-display">—</span>
+        <button id="change-appearance-btn" class="pixel-btn small" title="Change your avatar look">🎨</button>
         <button id="logout-btn" class="pixel-btn small danger" title="Log out">⏻ LOG OUT</button>
       </div>
     </header>
+
+    <!-- Change Appearance Modal -->
+    <div id="change-appearance-modal" class="modal-overlay hidden">
+      <div class="modal-box" style="max-width:320px">
+        <h2 class="modal-title" style="font-size:9px;margin-bottom:12px">CHANGE APPEARANCE</h2>
+        <p style="font-size:6px;color:#aaa;margin-bottom:10px;text-align:center">Pick your look — room will reload to apply.</p>
+        <div class="lp-avatar-pick-row" style="justify-content:center;margin-bottom:8px">
+          <button class="ca-gender-btn lp-gender-btn active" data-gender="male">BOY</button>
+          <button class="ca-gender-btn lp-gender-btn" data-gender="female">GIRL</button>
+        </div>
+        <div class="lp-color-pick-row" style="justify-content:center;margin-bottom:16px">
+          <button class="ca-color-swatch lp-color-swatch active" data-color="blue"   style="background:#5b8fe0" title="Blue"></button>
+          <button class="ca-color-swatch lp-color-swatch"        data-color="red"    style="background:#e05b5b" title="Red"></button>
+          <button class="ca-color-swatch lp-color-swatch"        data-color="green"  style="background:#5be05b" title="Green"></button>
+          <button class="ca-color-swatch lp-color-swatch"        data-color="purple" style="background:#9b5be0" title="Purple"></button>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:center">
+          <button id="ca-save-btn" class="pixel-btn small">✔ Save &amp; Reload</button>
+          <button id="ca-cancel-btn" class="pixel-btn small danger">✕ Cancel</button>
+        </div>
+      </div>
+    </div>
 
     <!-- Main layout: [task panel] [canvas] [social panel] -->
     <div id="main-layout">

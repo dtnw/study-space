@@ -1289,9 +1289,22 @@ class GameScene extends Phaser.Scene {
 
   _saveDIYLayout() {
     try { localStorage.setItem('studyspace_diy', JSON.stringify(this.diyPlaced)); } catch (_) {}
+    // Sync to server so all players see the updated room
+    window.socket?.emit('saveDIYLayout', { items: this.diyPlaced });
   }
 
   _loadDIYLayout() {
+    // Apply any layout received from server before scene started
+    if (window._pendingRoomLayout) {
+      const layout = window._pendingRoomLayout;
+      window._pendingRoomLayout = null;
+      layout.forEach(({ type, cx, cy, rotation }) => {
+        try { this._diyCreateItem(type, cx, cy, rotation); } catch(_) {}
+      });
+      // Also update local cache
+      try { localStorage.setItem('studyspace_diy', JSON.stringify(this.diyPlaced)); } catch(_) {}
+      return;
+    }
     try {
       const raw = localStorage.getItem('studyspace_diy');
       if (!raw) return;
@@ -1299,6 +1312,39 @@ class GameScene extends Phaser.Scene {
         this._diyCreateItem(type, cx, cy, rotation);
       });
     } catch (_) {}
+  }
+
+  /** Apply a room layout broadcast from the server (other players seeing creator's changes). */
+  _applyRoomLayout(items) {
+    if (!Array.isArray(items)) return;
+    // Clear all existing non-static DIY objects
+    const toRemove = this.diyObjects.filter(o => !o.isStatic);
+    toRemove.forEach(obj => {
+      try { this._diyDestroyObj(obj); } catch(_) {}
+    });
+    this.diyObjects  = this.diyObjects.filter(o => o.isStatic);
+    this.diyPlaced   = [];
+    this.diySelectedObj = null;
+    // Place all items from the new layout
+    items.forEach(({ type, cx, cy, rotation }) => {
+      try { this._diyCreateItem(type, cx, cy, rotation); } catch(_) {}
+    });
+    // Update local cache
+    try { localStorage.setItem('studyspace_diy', JSON.stringify(this.diyPlaced)); } catch(_) {}
+    this._buildChairGroups();
+  }
+
+  /** Update another player's sprite when their appearance changes. */
+  _updateOtherAppearance(id, gender, shirtColor) {
+    const sprite = this.otherPlayers[id];
+    if (!sprite) return;
+    const texPrefix = `player_${gender}_${shirtColor}`;
+    if (!this.textures.exists(texPrefix + '_down_0')) {
+      window.PixelSprites.createPlayerTextures(this, gender, shirtColor);
+    }
+    sprite.setTexture(texPrefix + '_down_0');
+    // Re-setup animations for this player if needed
+    window.PixelSprites.createPlayerTextures(this, gender, shirtColor);
   }
 
   // ── DIY Creator mode ──────────────────────────────────────────────────────
