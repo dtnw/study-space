@@ -23,6 +23,19 @@
     } catch(e) { window.location.replace('/'); }
   })();
 
+  // ── Room detection ─────────────────────────────────────────
+  (function _detectRoom() {
+    const ROOMS = [
+      { id: 'derrizzmachine', theme: 'cafe',  creator: 'derrizzmachine', path: '/cafe' },
+      { id: 'derbysaren',     theme: 'study', creator: 'derbysaren',     path: '/play' },
+    ];
+    const p = window.location.pathname.toLowerCase();
+    const room = ROOMS.find(r => r.path === p) || ROOMS[1];
+    window.__ROOM_ID__      = room.id;
+    window.__ROOM_THEME__   = room.theme;
+    window.__ROOM_CREATOR__ = room.creator;
+  })();
+
   const _tabChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('cc_game_tab') : null;
   (function _initTabEnforcement() {
     const raw = localStorage.getItem('cc_session');
@@ -298,8 +311,10 @@
     const _sess = window._ccSession;
     if (effectiveRole === 'creator') {
       const isGuest = !_sess || _sess.authType === 'guest';
-      const tl = (_sess?.twitchLogin || '').toLowerCase().trim();
-      if (isGuest || !tl) {
+      // Accept either twitchLogin or googleEmail as the identity to compare
+      const identity = (_sess?.twitchLogin || _sess?.googleEmail || '').toLowerCase().trim();
+      const expectedCreator = (window.__ROOM_CREATOR__ || 'derbysaren').toLowerCase();
+      if (isGuest || identity !== expectedCreator) {
         effectiveRole = 'regular';
       }
     }
@@ -535,7 +550,7 @@
     } catch(_) {}
 
     const _twitchLogin = window._ccSession?.twitchLogin || null;
-    socket.emit('playerJoin', { name, gender: _selectedGender, shirtColor: _selectedShirtColor, clientId: window._clientId, twitchLogin: _twitchLogin, startX, startY });
+    socket.emit('playerJoin', { name, gender: _selectedGender, shirtColor: _selectedShirtColor, clientId: window._clientId, twitchLogin: _twitchLogin, roomId: window.__ROOM_ID__, startX, startY });
 
     nameModal.classList.remove('active');
     nameModal.classList.add('hidden');
@@ -1652,7 +1667,7 @@
     if (twitchResult === 'connected') showToast('🟣 Twitch connected successfully!');
     else if (twitchResult === 'error') showToast('❌ Twitch connection failed. Check your config.');
     // Clean URL
-    history.replaceState({}, '', '/play');
+    history.replaceState({}, '', window.location.pathname);
   }
 
   function _setLockedInOverlay(on) {

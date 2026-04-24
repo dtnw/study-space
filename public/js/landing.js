@@ -183,9 +183,10 @@ function renderSpaces(spaces) {
       : (isLive ? '' : '<div class="room-card-stream-title" style="color:#555">Not streaming right now</div>');
     const game     = space.gameName ? '<div class="room-card-game">🎮 ' + esc(space.gameName) + '</div>' : '';
     const players  = '<div class="room-card-players">👥 ' + (space.playersOnline || 0) + ' ' + (space.playersOnline === 1 ? 'person' : 'people') + ' in the space</div>';
+    const defaultIcon   = space.theme === 'cafe' ? '☕' : '🌷';
     const bannerContent = space.creatorAvatar
       ? `<img src="${esc(space.creatorAvatar)}" alt="" class="room-banner-avatar" />`
-      : `<span class="room-banner-icon">🌷</span>`;
+      : `<span class="room-banner-icon">${defaultIcon}</span>`;
     const enterBtn = isLive
       ? `<a href="${esc(space.roomPath)}" class="room-enter-btn" onclick="event.stopPropagation()">Enter Space →</a>`
       : `<a href="${esc(space.roomPath)}" class="room-enter-btn room-enter-offline" onclick="event.stopPropagation()">Enter Space (Offline)</a>`;

@@ -7,9 +7,13 @@ const https = require('https');
 
 const app = express();
 const DATA_PATH  = path.join(__dirname, 'data', 'tasks.json');
-const ROLES_PATH = path.join(__dirname, 'data', 'roles.json');
 const TWITCH_CONFIG_PATH = path.join(__dirname, 'data', 'twitch-config.json');
 const TWITCH_TOKEN_PATH  = path.join(__dirname, 'data', 'twitch-token.json');
+
+const ROOM_CONFIGS = [
+  { id: 'derbysaren',     creatorLogin: 'derbysaren',     name: "Derby's Study Space",   path: '/play', theme: 'study' },
+  { id: 'derrizzmachine', creatorLogin: 'derrizzmachine', name: "DerRizzMachine's Café", path: '/cafe', theme: 'cafe'  },
+];
 
 function loadTasks() {
   try {
@@ -24,27 +28,42 @@ function saveTasks() {
   } catch (e) { console.warn('Could not save tasks:', e.message); }
 }
 
-// Roles: { creatorClientId, modClientIds:[], bannedClientIds:[{clientId,name}] }
-function loadRoles() {
-  try {
-    if (fs.existsSync(ROLES_PATH)) return JSON.parse(fs.readFileSync(ROLES_PATH, 'utf8'));
-  } catch (e) {}
+// Per-room roles: { creatorClientId, modClientIds:[], bannedClientIds:[{clientId,name}] }
+function loadRolesForRoom(roomId) {
+  const filename = roomId === 'derbysaren' ? 'roles.json' : `${roomId}-roles.json`;
+  const p = path.join(__dirname, 'data', filename);
+  try { if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, 'utf8')); } catch(e) {}
   return { creatorClientId: null, modClientIds: [], bannedClientIds: [] };
 }
-function saveRoles() {
-  try {
-    fs.mkdirSync(path.dirname(ROLES_PATH), { recursive: true });
-    fs.writeFileSync(ROLES_PATH, JSON.stringify(rolesData, null, 2));
-  } catch (e) {}
+function saveRolesForRoom(roomId) {
+  const filename = roomId === 'derbysaren' ? 'roles.json' : `${roomId}-roles.json`;
+  const p = path.join(__dirname, 'data', filename);
+  try { fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, JSON.stringify(getRoomState(roomId).rolesData, null, 2)); } catch(e) {}
 }
-let rolesData = loadRoles();
-
-function getRoleFor(clientId) {
+function getRoleForRoom(clientId, roomId) {
   if (!clientId) return 'regular';
-  // Creator role is ONLY granted via twitchLogin match in playerJoin — never from a stored clientId.
-  // This prevents stale roles.json entries from giving non-owners creator privileges.
-  if (rolesData.modClientIds.includes(clientId)) return 'mod';
+  const rd = getRoomState(roomId).rolesData;
+  if (rd.modClientIds.includes(clientId)) return 'mod';
   return 'regular';
+}
+
+// Per-room state. Each room has its own players, seat map, layout, roles, and calls.
+const roomState = new Map();
+let _callIdSeq = 0;
+function _makeCallId() { return 'call-' + Date.now() + '-' + (++_callIdSeq); }
+
+function getRoomState(roomId) {
+  if (!roomState.has(roomId)) {
+    roomState.set(roomId, {
+      players:       {},
+      clientIdMap:   {},
+      seatOccupancy: {},
+      roomLayout:    null,
+      rolesData:     loadRolesForRoom(roomId),
+      activeCalls:   {},
+    });
+  }
+  return roomState.get(roomId);
 }
 const httpServer = createServer(app);
 const io = new Server(httpServer);
@@ -59,14 +78,15 @@ app.get('/',     (req, res) => res.sendFile(path.join(__dirname, 'public', 'land
 app.get('/play', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
+app.get('/cafe', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 // Direct space links: /space/derbysaren  or  /@derbysaren  → redirects to that room
 app.get('/space/:login', (req, res) => {
   const login = req.params.login.toLowerCase().trim();
-  // Map known creator logins to their room paths
-  const spaceMap = { [twitchCfg.creatorLogin?.toLowerCase()]: '/play' };
-  const roomPath = spaceMap[login];
-  if (roomPath) return res.redirect(roomPath);
+  const room = ROOM_CONFIGS.find(r => r.creatorLogin?.toLowerCase() === login);
+  if (room) return res.redirect(room.path);
   res.redirect('/'); // unknown space → back to lobby
 });
 app.get('/@:login', (req, res) => {
@@ -119,16 +139,6 @@ if (globalTasks.length === 0) {
   saveTasks();
 }
 
-const players = {};
-// Maps stable client UUID → socket.id for reconnection deduplication
-const clientIdMap = {};
-// Server-side chair occupancy: chairId → socketId
-const seatOccupancy = {};
-// Per-player calls: callId → { participants: [socketId] }
-const activeCalls = {};
-let _callIdSeq = 0;
-function _makeCallId() { return 'call-' + Date.now() + '-' + (++_callIdSeq); }
-
 const playerSessions = new Map();   // token → { name, twitchLogin, profilePic, expiresAt }
 const CREATOR_CODES_PATH = path.join(__dirname, 'data', 'creator-codes.json');
 function loadCreatorCodes() {
@@ -174,9 +184,12 @@ function loadSubscriptions() {
 function saveSubscriptions(subs) {
   try { fs.mkdirSync(path.dirname(SUBSCRIPTIONS_PATH), { recursive: true }); fs.writeFileSync(SUBSCRIPTIONS_PATH, JSON.stringify(subs, null, 2)); } catch(e) {}
 }
-let spaceStatus = { live: false, twitchUser: null, twitchLogin: null, streamTitle: null, viewerCount: 0, gameName: null };
-let creatorProfileImage = null;  // cached from /helix/users
-let roomLayout = null;           // server-side DIY layout; updated by creator, broadcast to all
+const roomSpaceStatus = {};        // roomId → spaceStatus object
+const roomCreatorImages = {};      // roomId → profile image URL
+
+ROOM_CONFIGS.forEach(cfg => {
+  roomSpaceStatus[cfg.id] = { live: false, twitchUser: null, twitchLogin: null, streamTitle: null, viewerCount: 0, gameName: null };
+});
 
 // ── App access token (client credentials, no user sign-in needed) ──
 let _appToken = { accessToken: null, expiresAt: 0 };
@@ -272,45 +285,49 @@ async function refreshTwitchToken() {
   return false;
 }
 async function getCreatorProfile() {
-  const login = twitchCfg.creatorLogin || twitchToken?.twitchLogin;
-  if (!login || !twitchCfg.clientId) return;
+  if (!twitchCfg.clientId) return;
   try {
     const appTok = await getAppToken();
     if (!appTok) return;
-    const r = await _httpsGet('api.twitch.tv', `/helix/users?login=${login}`, twitchHeaders(appTok));
-    const user = r.body?.data?.[0];
-    if (user?.profile_image_url) {
-      creatorProfileImage = user.profile_image_url;
-      console.log('Creator profile image fetched:', creatorProfileImage);
+    for (const cfg of ROOM_CONFIGS) {
+      if (!cfg.creatorLogin) continue;
+      try {
+        const r = await _httpsGet('api.twitch.tv', `/helix/users?login=${cfg.creatorLogin}`, twitchHeaders(appTok));
+        const user = r.body?.data?.[0];
+        if (user?.profile_image_url) {
+          roomCreatorImages[cfg.id] = user.profile_image_url;
+          console.log('Creator profile image fetched for', cfg.id, ':', user.profile_image_url);
+        }
+      } catch(e) {}
     }
   } catch(e) { console.warn('getCreatorProfile failed:', e.message); }
 }
 
 async function checkLiveStatus() {
-  // Determine which login to check — prefer connected creator, fall back to config
-  const loginToCheck = twitchCfg.creatorLogin || twitchToken?.twitchLogin || null;
-  if (!loginToCheck || !twitchCfg.clientId) return;
-  try {
-    // Use app access token (client credentials) — never expires due to user re-auth
-    const appTok = await getAppToken();
-    if (!appTok) return;
-    // Fetch stream status
-    const r = await _httpsGet('api.twitch.tv', `/helix/streams?user_login=${loginToCheck}`, twitchHeaders(appTok));
-    if (r.status === 401) { _appToken = { accessToken: null, expiresAt: 0 }; return; } // will refresh next cycle
-    const stream = r.body?.data?.[0];
-    // Also refresh creator profile image if not yet set
-    if (!creatorProfileImage) await getCreatorProfile();
-    spaceStatus = {
-      live:        !!stream,
-      twitchUser:  twitchToken?.twitchDisplayName || twitchToken?.twitchLogin || loginToCheck,
-      twitchLogin: loginToCheck,
-      streamTitle: stream?.title || null,
-      viewerCount: stream?.viewer_count || 0,
-      gameName:    stream?.game_name || null,
-    };
-    console.log('Live status updated:', spaceStatus.live, 'login:', loginToCheck);
-    io.emit('spaceStatus', spaceStatus);
-  } catch(e) { console.warn('Twitch check failed:', e.message); }
+  if (!twitchCfg.clientId) return;
+  const appTok = await getAppToken();
+  if (!appTok) return;
+  for (const cfg of ROOM_CONFIGS) {
+    if (!cfg.creatorLogin) continue;
+    try {
+      const r = await _httpsGet('api.twitch.tv', `/helix/streams?user_login=${cfg.creatorLogin}`, twitchHeaders(appTok));
+      if (r.status === 401) { _appToken = { accessToken: null, expiresAt: 0 }; return; }
+      const stream = r.body?.data?.[0];
+      roomSpaceStatus[cfg.id] = {
+        live:        !!stream,
+        twitchUser:  cfg.creatorLogin,
+        twitchLogin: cfg.creatorLogin,
+        streamTitle: stream?.title || null,
+        viewerCount: stream?.viewer_count || 0,
+        gameName:    stream?.game_name || null,
+      };
+      console.log('Live status for', cfg.id, ':', !!stream);
+      // Broadcast status to room occupants
+      io.to(cfg.id).emit('spaceStatus', roomSpaceStatus[cfg.id]);
+    } catch(e) { console.warn('Twitch check failed for', cfg.id, ':', e.message); }
+  }
+  // Ensure creator images are fetched (for landing page)
+  if (Object.keys(roomCreatorImages).length === 0) await getCreatorProfile();
 }
 setInterval(checkLiveStatus, 60000);
 checkLiveStatus();
@@ -369,8 +386,12 @@ app.get('/auth/twitch/callback', async (req, res) => {
 });
 
 app.post('/auth/twitch/disconnect', (req, res) => {
-  twitchToken = null; saveTwitchToken({}); spaceStatus = { live: false, twitchUser: null, twitchLogin: null, streamTitle: null, viewerCount: 0, gameName: null };
-  io.emit('spaceStatus', spaceStatus); res.json({ ok: true });
+  twitchToken = null; saveTwitchToken({});
+  ROOM_CONFIGS.forEach(cfg => {
+    roomSpaceStatus[cfg.id] = { live: false, twitchUser: null, twitchLogin: null, streamTitle: null, viewerCount: 0, gameName: null };
+    io.to(cfg.id).emit('spaceStatus', roomSpaceStatus[cfg.id]);
+  });
+  res.json({ ok: true });
 });
 
 app.get('/auth/google', (req, res) => {
@@ -420,24 +441,32 @@ app.get('/api/session/:token', (req, res) => {
   res.json({ name: session.name, twitchLogin: session.twitchLogin, googleEmail: session.googleEmail || null, profilePic: session.profilePic, authType: session.authType || 'twitch' });
 });
 
-app.get('/api/twitch/status', (req, res) => res.json(spaceStatus));
+app.get('/api/twitch/status', (req, res) => {
+  const roomId = (req.query.roomId && ROOM_CONFIGS.find(r => r.id === req.query.roomId)) ? req.query.roomId : 'derbysaren';
+  res.json(roomSpaceStatus[roomId] || {});
+});
 app.get('/api/twitch/config', (req, res) => res.json({ configured: !!(twitchCfg.clientId && twitchCfg.clientSecret), connected: !!twitchToken?.twitchLogin, twitchUser: twitchToken?.twitchDisplayName || null, profileImageUrl: twitchToken?.profileImageUrl || null }));
 
 app.get('/api/spaces', (req, res) => {
-  const spaces = [{
-    id:           'derbysaren',
-    name:         "Derby's Study Space",
-    twitchLogin:  twitchToken?.twitchLogin || 'derbysaren',
-    description:  "Derby's cozy community study room",
-    roomPath:     '/play',
-    live:          spaceStatus.live,
-    streamTitle:   spaceStatus.streamTitle,
-    viewerCount:   spaceStatus.viewerCount || 0,
-    gameName:      spaceStatus.gameName,
-    twitchUser:    spaceStatus.twitchUser,
-    playersOnline: Object.keys(players).length,
-    creatorAvatar: creatorProfileImage || twitchToken?.profileImageUrl || null,
-  }];
+  const spaces = ROOM_CONFIGS.map(cfg => {
+    const rs  = getRoomState(cfg.id);
+    const st  = roomSpaceStatus[cfg.id] || {};
+    return {
+      id:           cfg.id,
+      name:         cfg.name,
+      twitchLogin:  cfg.creatorLogin,
+      description:  '',
+      roomPath:     cfg.path,
+      theme:        cfg.theme,
+      live:         !!st.live,
+      streamTitle:  st.streamTitle  || null,
+      viewerCount:  st.viewerCount  || 0,
+      gameName:     st.gameName     || null,
+      twitchUser:   st.twitchUser   || null,
+      playersOnline: Object.keys(rs.players).length,
+      creatorAvatar: roomCreatorImages[cfg.id] || null,
+    };
+  });
   spaces.sort((a, b) => {
     const sA = (a.live ? 100000 : 0) + (a.viewerCount * 100) + (a.playersOnline * 50);
     const sB = (b.live ? 100000 : 0) + (b.viewerCount * 100) + (b.playersOnline * 50);
@@ -507,58 +536,67 @@ io.on('connection', (socket) => {
 
   // Per-socket rate limiters
   const allow = {
-    playerMove:    makeLimiter(20,  1000),   // 20 moves/s
-    sendChat:      makeLimiter(5,   3000),   // 5 msgs / 3 s
-    directMessage: makeLimiter(10,  3000),   // 10 DMs / 3 s
-    friendRequest: makeLimiter(10,  10000),  // 10 / 10 s
-    addTask:       makeLimiter(5,   10000),  // 5 tasks / 10 s
+    playerMove:    makeLimiter(20,  1000),
+    sendChat:      makeLimiter(5,   3000),
+    directMessage: makeLimiter(10,  3000),
+    friendRequest: makeLimiter(10,  10000),
+    addTask:       makeLimiter(5,   10000),
   };
 
-  // Send current state to new player
+  // Per-room helpers (valid after playerJoin sets socket.data.roomId)
+  const R      = ()         => socket.data.roomId ? getRoomState(socket.data.roomId) : null;
+  const P      = ()         => R()?.players || {};
+  const me     = ()         => P()[socket.id];
+  const bcast  = (evt, d)   => { if (socket.data.roomId) socket.to(socket.data.roomId).emit(evt, d); };
+  const emitR  = (evt, d)   => { if (socket.data.roomId) io.to(socket.data.roomId).emit(evt, d); };
+
+  // Send tasks immediately (global); room status + layout sent after playerJoin
   socket.emit('init', { tasks: globalTasks });
-  socket.emit('spaceStatus', spaceStatus);
-  // Send current room DIY layout to new player (if any has been saved)
-  if (roomLayout) socket.emit('roomLayout', roomLayout);
 
   // ── Player join ──────────────────────────────────────────
-  socket.on('playerJoin', ({ name, gender, shirtColor, clientId, twitchLogin, startX, startY }) => {
-    if (players[socket.id]) return; // already joined — ignore duplicate
+  socket.on('playerJoin', ({ name, gender, shirtColor, clientId, twitchLogin, roomId, startX, startY }) => {
+    // Resolve room
+    const cfg = ROOM_CONFIGS.find(r => r.id === roomId);
+    const safeRoomId = cfg ? cfg.id : 'derbysaren';
+    socket.data.roomId = safeRoomId;
+    socket.join(safeRoomId);                 // socket.io room for scoped broadcasts
+
+    const rs = getRoomState(safeRoomId);
+    if (rs.players[socket.id]) return;       // already joined
+
     const safeName = sanitise(name, 24);
     if (!safeName) return socket.disconnect();
-
     const safeClientId = sanitise(clientId, 64);
 
-    // Reject banned players before doing anything else
-    if (safeClientId && rolesData.bannedClientIds.some(b => b.clientId === safeClientId)) {
+    // Ban check
+    if (safeClientId && rs.rolesData.bannedClientIds.some(b => b.clientId === safeClientId)) {
       socket.emit('kicked', { reason: 'You have been banned from this space.' });
-      socket.disconnect();
-      return;
+      socket.disconnect(); return;
     }
 
-    // Reconnection: evict ghost player from previous socket
-    if (safeClientId && clientIdMap[safeClientId] && clientIdMap[safeClientId] !== socket.id) {
-      const oldSocketId = clientIdMap[safeClientId];
-      if (players[oldSocketId]) {
-        socket.broadcast.emit('playerLeft', { id: oldSocketId });
-        delete players[oldSocketId];
+    // Evict ghost from previous socket
+    if (safeClientId && rs.clientIdMap[safeClientId] && rs.clientIdMap[safeClientId] !== socket.id) {
+      const oldId = rs.clientIdMap[safeClientId];
+      if (rs.players[oldId]) {
+        socket.to(safeRoomId).emit('playerLeft', { id: oldId });
+        delete rs.players[oldId];
       }
     }
-    if (safeClientId) clientIdMap[safeClientId] = socket.id;
+    if (safeClientId) rs.clientIdMap[safeClientId] = socket.id;
 
     const safeTwitchLogin = typeof twitchLogin === 'string' ? twitchLogin.toLowerCase().trim() : null;
 
-    // Creator role: twitchLogin matching config takes absolute priority
+    // Creator role: twitchLogin must match this room's creatorLogin
     let role;
-    if (safeTwitchLogin && twitchCfg.creatorLogin &&
-        safeTwitchLogin === twitchCfg.creatorLogin.toLowerCase()) {
-      // This is the room owner — always creator regardless of rolesData
+    if (safeTwitchLogin && cfg?.creatorLogin &&
+        safeTwitchLogin === cfg.creatorLogin.toLowerCase()) {
       role = 'creator';
-      if (safeClientId && rolesData.creatorClientId !== safeClientId) {
-        rolesData.creatorClientId = safeClientId;
-        saveRoles();
+      if (safeClientId && rs.rolesData.creatorClientId !== safeClientId) {
+        rs.rolesData.creatorClientId = safeClientId;
+        saveRolesForRoom(safeRoomId);
       }
     } else {
-      role = getRoleFor(safeClientId);
+      role = getRoleForRoom(safeClientId, safeRoomId);
     }
 
     const safeColor  = ['blue','red','green','purple'].includes(shirtColor) ? shirtColor : 'blue';
@@ -566,83 +604,50 @@ io.on('connection', (socket) => {
     const sx = (typeof startX === 'number' && startX >= 32 && startX <= 1068) ? Math.round(startX) : 400;
     const sy = (typeof startY === 'number' && startY >= 32 && startY <= 764)  ? Math.round(startY) : 560;
 
-    players[socket.id] = {
-      id: socket.id,
-      clientId: safeClientId || socket.id,
-      name: safeName,
-      gender: safeGender,
-      shirtColor: safeColor,
-      x: sx,
-      y: sy,
-      chatPreference: 'sociable',
-      role,
-      friends: [],
-      pendingFrom: [],
-      pendingMessages: [],
-    };
-    io.emit('playerCount', Object.keys(players).length);
+    rs.players[socket.id] = { id: socket.id, clientId: safeClientId || socket.id, name: safeName, gender: safeGender, shirtColor: safeColor, x: sx, y: sy, chatPreference: 'sociable', role, friends: [], pendingFrom: [], pendingMessages: [] };
 
-    // Tell this player their role
+    emitR('playerCount', Object.keys(rs.players).length);
     socket.emit('yourRole', { role });
-    socket.emit('spaceStatus', spaceStatus);
+    socket.emit('spaceStatus', roomSpaceStatus[safeRoomId] || {});
+    if (rs.roomLayout) socket.emit('roomLayout', rs.roomLayout);
 
-    // Send existing players to new joiner (include roles + statusIcon)
-    socket.emit('existingPlayers', Object.values(players)
+    socket.emit('existingPlayers', Object.values(rs.players)
       .filter(p => p.id !== socket.id)
-      .map(p => ({
-        id: p.id, name: p.name, gender: p.gender, shirtColor: p.shirtColor,
-        x: p.x, y: p.y, chatPreference: p.chatPreference,
-        role: p.role || 'regular', statusIcon: p.statusIcon || null,
-      }))
+      .map(p => ({ id: p.id, name: p.name, gender: p.gender, shirtColor: p.shirtColor, x: p.x, y: p.y, chatPreference: p.chatPreference, role: p.role || 'regular', statusIcon: p.statusIcon || null }))
     );
-
-    // Tell the joining client their restored spawn position
     socket.emit('spawnAt', { x: sx, y: sy });
-
-    // Broadcast new player to everyone else (include role)
-    socket.broadcast.emit('playerJoined', {
-      id: socket.id, name: safeName, gender: safeGender, shirtColor: safeColor,
-      x: sx, y: sy, chatPreference: 'sociable', role, statusIcon: null,
-    });
+    bcast('playerJoined', { id: socket.id, name: safeName, gender: safeGender, shirtColor: safeColor, x: sx, y: sy, chatPreference: 'sociable', role, statusIcon: null });
   });
 
   // ── Player movement ──────────────────────────────────────
   socket.on('playerMove', ({ x, y }) => {
     if (!allow.playerMove()) return;
-    const p = players[socket.id];
-    if (!p) return;
-    // Clamp to valid world bounds (matches client canvas 1100×800)
+    const p = me(); if (!p) return;
     const cx = Math.max(32, Math.min(1068, Math.round(Number(x) || 0)));
     const cy = Math.max(32, Math.min(764,  Math.round(Number(y) || 0)));
-    // Reject implausible teleports (> 200px per tick at 150ms intervals = ~1300px/s)
     const dx = cx - p.x, dy = cy - p.y;
     if (Math.sqrt(dx * dx + dy * dy) > 200) return;
     p.x = cx; p.y = cy;
-    socket.broadcast.emit('playerMoved', { id: socket.id, x: cx, y: cy });
+    bcast('playerMoved', { id: socket.id, x: cx, y: cy });
   });
 
   // ── Chat preference ──────────────────────────────────────
   socket.on('updatePreference', ({ preference }) => {
     const safe = ['sociable', 'private', 'lockedin'].includes(preference) ? preference : null;
-    if (!safe || !players[socket.id]) return;
-    const wasLocked = players[socket.id].chatPreference === 'lockedin';
-    players[socket.id].chatPreference = safe;
-    socket.broadcast.emit('playerPreferenceUpdated', { id: socket.id, preference: safe });
-    // Flush queued messages now that player is no longer locked in
+    const p = me(); if (!safe || !p) return;
+    const wasLocked = p.chatPreference === 'lockedin';
+    p.chatPreference = safe;
+    bcast('playerPreferenceUpdated', { id: socket.id, preference: safe });
     if (wasLocked && safe !== 'lockedin') {
-      if (!Array.isArray(players[socket.id].pendingMessages)) players[socket.id].pendingMessages = [];
-      const pending = players[socket.id].pendingMessages.splice(0);
-      pending.forEach(msg => {
-        socket.emit('chatMessage', { fromId: msg.fromId, fromName: msg.fromName, message: msg.message });
-      });
+      const pending = (p.pendingMessages || []).splice(0);
+      pending.forEach(msg => socket.emit('chatMessage', { fromId: msg.fromId, fromName: msg.fromName, message: msg.message }));
     }
   });
 
   // ── Friend request ───────────────────────────────────────
   socket.on('friendRequest', ({ toId }) => {
     if (!allow.friendRequest()) return;
-    const sender = players[socket.id];
-    const target = players[toId];
+    const sender = me(), target = P()[toId];
     if (!sender || !target) return;
     if (target.friends.includes(socket.id)) return;
     if (target.pendingFrom.some(r => r.fromId === socket.id)) return;
@@ -650,33 +655,23 @@ io.on('connection', (socket) => {
     io.to(toId).emit('friendRequestReceived', { fromId: socket.id, fromName: sender.name });
   });
 
-  // ── Friend accept ────────────────────────────────────────
   socket.on('friendAccept', ({ fromId }) => {
-    const accepter = players[socket.id];
-    const requester = players[fromId];
+    const accepter = me(), requester = P()[fromId];
     if (!accepter || !requester) return;
-    // Add to each other's friends arrays
     if (!accepter.friends.includes(fromId)) accepter.friends.push(fromId);
     if (!requester.friends.includes(socket.id)) requester.friends.push(socket.id);
-    // Remove from pendingFrom
     accepter.pendingFrom = accepter.pendingFrom.filter(r => r.fromId !== fromId);
-    // Notify both
     io.to(fromId).emit('friendAdded', { id: socket.id, name: accepter.name });
     socket.emit('friendAdded', { id: fromId, name: requester.name });
   });
 
-  // ── Friend decline ───────────────────────────────────────
   socket.on('friendDecline', ({ fromId }) => {
-    const accepter = players[socket.id];
-    if (!accepter) return;
-    accepter.pendingFrom = accepter.pendingFrom.filter(r => r.fromId !== fromId);
+    const p = me(); if (p) p.pendingFrom = p.pendingFrom.filter(r => r.fromId !== fromId);
   });
 
-  // ── Remove friend ────────────────────────────────────────
   socket.on('removeFriend', ({ friendId }) => {
-    const me = players[socket.id];
-    const other = players[friendId];
-    if (me) me.friends = me.friends.filter(id => id !== friendId);
+    const self = me(), other = P()[friendId];
+    if (self) self.friends = self.friends.filter(id => id !== friendId);
     if (other) other.friends = other.friends.filter(id => id !== socket.id);
     socket.emit('friendRemoved', { id: friendId });
     if (other) io.to(friendId).emit('friendRemoved', { id: socket.id });
@@ -685,14 +680,10 @@ io.on('connection', (socket) => {
   // ── Direct message ───────────────────────────────────────
   socket.on('directMessage', ({ toId, message }) => {
     if (!allow.directMessage()) return;
-    const sender = players[socket.id];
-    const target = players[toId];
+    const sender = me(), target = P()[toId];
     if (!sender || !target) return;
-    const safeMsg = sanitise(message, 200);   // ← must be before any use of safeMsg
-    if (!safeMsg) return;
-    // Private players only accept DMs from friends
+    const safeMsg = sanitise(message, 200); if (!safeMsg) return;
     if (target.chatPreference === 'private' && !sender.friends.includes(toId)) return;
-    // Locked-in: queue the message and deliver when they become active again
     if (target.chatPreference === 'lockedin') {
       if (!Array.isArray(target.pendingMessages)) target.pendingMessages = [];
       target.pendingMessages.push({ fromId: socket.id, fromName: sender.name, message: safeMsg });
@@ -701,15 +692,13 @@ io.on('connection', (socket) => {
     io.to(toId).emit('chatMessage', { fromId: socket.id, fromName: sender.name, message: safeMsg });
   });
 
-  // ── Send chat (proximity — server validates distance) ────
-  socket.on('sendChat', ({ message }) => {  // nearbyIds no longer accepted from client
+  // ── Proximity chat ────────────────────────────────────────
+  socket.on('sendChat', ({ message }) => {
     if (!allow.sendChat()) return;
-    const sender = players[socket.id];
-    if (!sender) return;
-    const safeMsg = sanitise(message, 200);
-    if (!safeMsg) return;
+    const sender = me(); if (!sender) return;
+    const safeMsg = sanitise(message, 200); if (!safeMsg) return;
     const MAX_PROXIMITY = 120;
-    for (const [id, target] of Object.entries(players)) {
+    for (const [id, target] of Object.entries(P())) {
       if (id === socket.id) continue;
       const dx = sender.x - target.x, dy = sender.y - target.y;
       if (Math.sqrt(dx * dx + dy * dy) > MAX_PROXIMITY) continue;
@@ -717,30 +706,18 @@ io.on('connection', (socket) => {
       if (target.chatPreference === 'private' && !target.friends.includes(socket.id)) continue;
       io.to(id).emit('chatMessage', { fromId: socket.id, fromName: sender.name, message: safeMsg });
     }
-    // Echo back to sender
     socket.emit('chatMessage', { fromId: socket.id, fromName: sender.name, message: safeMsg, isSelf: true });
   });
 
-  // ── Task events ──────────────────────────────────────────
+  // ── Tasks (global across all rooms) ──────────────────────
+  const myClientId = () => me()?.clientId || socket.id;
 
-  // Add a task (appears on both personal + global boards)
   socket.on('addTask', ({ text, playerName }) => {
     if (!allow.addTask()) return;
-    const safeText = sanitise(text, 120);
-    if (!safeText) return;
-    const p = players[socket.id];
-    const safeName = p ? p.name : sanitise(playerName, 24);
-    const p2 = players[socket.id];
-    const task = {
-      id: `${(p2?.clientId || socket.id)}-${Date.now()}`,
-      text: safeText,
-      playerName: safeName,
-      playerId: p2?.clientId || socket.id,
-      completed: false,
-      createdAt: new Date().toISOString(),
-    };
+    const safeText = sanitise(text, 120); if (!safeText) return;
+    const p = me();
+    const task = { id: `${(p?.clientId || socket.id)}-${Date.now()}`, text: safeText, playerName: p ? p.name : sanitise(playerName, 24), playerId: p?.clientId || socket.id, completed: false, createdAt: new Date().toISOString() };
     globalTasks.push(task);
-    // Prune: keep all incomplete + only the 200 most-recent completed
     const incomplete = globalTasks.filter(t => !t.completed);
     const completed  = globalTasks.filter(t =>  t.completed).slice(-200);
     globalTasks = [...incomplete, ...completed];
@@ -748,299 +725,184 @@ io.on('connection', (socket) => {
     io.emit('taskAdded', task);
   });
 
-  // Helper: get the stable clientId for the acting socket
-  const myClientId = () => players[socket.id]?.clientId || socket.id;
-
-  // Mark a task complete (only owner)
   socket.on('completeTask', ({ taskId }) => {
-    const task = globalTasks.find((t) => t.id === taskId && t.playerId === myClientId());
-    if (task) {
-      task.completed = true;
-      saveTasks();
-      io.emit('taskCompleted', { taskId });
-    }
+    const task = globalTasks.find(t => t.id === taskId && t.playerId === myClientId());
+    if (task) { task.completed = true; saveTasks(); io.emit('taskCompleted', { taskId }); }
   });
-
-  // Undo a task completion (only owner)
   socket.on('uncompleteTask', ({ taskId }) => {
-    const task = globalTasks.find((t) => t.id === taskId && t.playerId === myClientId());
-    if (task) {
-      task.completed = false;
-      saveTasks();
-      io.emit('taskUncompleted', { taskId });
-    }
+    const task = globalTasks.find(t => t.id === taskId && t.playerId === myClientId());
+    if (task) { task.completed = false; saveTasks(); io.emit('taskUncompleted', { taskId }); }
   });
-
-  // Delete a task (only owner can delete)
   socket.on('deleteTask', ({ taskId }) => {
-    const task = globalTasks.find((t) => t.id === taskId);
-    if (task && task.playerId === myClientId()) {
-      globalTasks = globalTasks.filter((t) => t.id !== taskId);
-      saveTasks();
-      io.emit('taskDeleted', { taskId });
-    }
+    const task = globalTasks.find(t => t.id === taskId);
+    if (task && task.playerId === myClientId()) { globalTasks = globalTasks.filter(t => t.id !== taskId); saveTasks(); io.emit('taskDeleted', { taskId }); }
+  });
+  socket.on('clearAllTasks', () => {
+    const p = me(); if (!p || (p.role !== 'creator' && p.role !== 'mod')) return;
+    globalTasks = []; saveTasks(); io.emit('allTasksCleared');
   });
 
-  // ── Status icon broadcast ────────────────────────────────
+  // ── Status icon ───────────────────────────────────────────
   socket.on('playerStatusIcon', ({ type }) => {
-    const p = players[socket.id];
-    if (!p) return;
+    const p = me(); if (!p) return;
     const valid = [null,'focus','break','pause','eating','cooking','relax','laundry','coffee','workout','washup'];
     const safe = valid.includes(type) ? type : null;
     p.statusIcon = safe;
-    socket.broadcast.emit('playerStatusIconUpdated', { id: socket.id, type: safe });
+    bcast('playerStatusIconUpdated', { id: socket.id, type: safe });
   });
 
-  // ── Block player (mutual) ───────────────────────────────
-  socket.on('blockPlayer', ({ targetId }) => {
-    if (!players[socket.id] || !players[targetId]) return;
-    io.to(targetId).emit('youWereBlocked', { by: socket.id });
-  });
-
-  // ── Unblock player — re-introduce both sides ────────────
+  // ── Block / unblock ───────────────────────────────────────
+  socket.on('blockPlayer',   ({ targetId }) => { if (me() && P()[targetId]) io.to(targetId).emit('youWereBlocked', { by: socket.id }); });
   socket.on('unblockPlayer', ({ targetId }) => {
-    const me = players[socket.id];
-    const target = players[targetId];
-    if (!me || !target) return;
-    // Reintroduce target to me
-    socket.emit('playerJoined', {
-      id: target.id, name: target.name, gender: target.gender,
-      shirtColor: target.shirtColor, x: target.x, y: target.y,
-      chatPreference: target.chatPreference, role: target.role || 'regular',
-      statusIcon: target.statusIcon || null,
-    });
-    // Reintroduce me to target
-    io.to(targetId).emit('playerJoined', {
-      id: me.id, name: me.name, gender: me.gender,
-      shirtColor: me.shirtColor, x: me.x, y: me.y,
-      chatPreference: me.chatPreference, role: me.role || 'regular',
-      statusIcon: me.statusIcon || null,
-    });
+    const self = me(), target = P()[targetId];
+    if (!self || !target) return;
+    socket.emit('playerJoined', { id: target.id, name: target.name, gender: target.gender, shirtColor: target.shirtColor, x: target.x, y: target.y, chatPreference: target.chatPreference, role: target.role || 'regular', statusIcon: target.statusIcon || null });
+    io.to(targetId).emit('playerJoined', { id: self.id, name: self.name, gender: self.gender, shirtColor: self.shirtColor, x: self.x, y: self.y, chatPreference: self.chatPreference, role: self.role || 'regular', statusIcon: self.statusIcon || null });
   });
 
-  // ── Role management ─────────────────────────────────────
+  // ── Role management ───────────────────────────────────────
   socket.on('appointMod', ({ targetId }) => {
-    const me = players[socket.id];
-    const target = players[targetId];
-    if (!me || me.role !== 'creator' || !target) return;
-    if (!rolesData.modClientIds.includes(target.clientId))
-      rolesData.modClientIds.push(target.clientId);
-    saveRoles();
+    const self = me(), target = P()[targetId];
+    if (!self || self.role !== 'creator' || !target) return;
+    const rd = R().rolesData;
+    if (!rd.modClientIds.includes(target.clientId)) rd.modClientIds.push(target.clientId);
+    saveRolesForRoom(socket.data.roomId);
     target.role = 'mod';
     io.to(targetId).emit('yourRole', { role: 'mod' });
-    io.emit('playerRoleUpdated', { id: targetId, role: 'mod' });
+    emitR('playerRoleUpdated', { id: targetId, role: 'mod' });
   });
-
   socket.on('removeMod', ({ targetId }) => {
-    const me = players[socket.id];
-    const target = players[targetId];
-    if (!me || me.role !== 'creator' || !target) return;
-    rolesData.modClientIds = rolesData.modClientIds.filter(id => id !== target.clientId);
-    saveRoles();
+    const self = me(), target = P()[targetId];
+    if (!self || self.role !== 'creator' || !target) return;
+    const rd = R().rolesData;
+    rd.modClientIds = rd.modClientIds.filter(id => id !== target.clientId);
+    saveRolesForRoom(socket.data.roomId);
     target.role = 'regular';
     io.to(targetId).emit('yourRole', { role: 'regular' });
-    io.emit('playerRoleUpdated', { id: targetId, role: 'regular' });
+    emitR('playerRoleUpdated', { id: targetId, role: 'regular' });
   });
 
-  // ── Ban player ──────────────────────────────────────────
   socket.on('banPlayer', ({ targetId }) => {
-    const me = players[socket.id];
-    const target = players[targetId];
-    if (!me || !target) return;
-    if (me.role !== 'creator' && me.role !== 'mod') return;
-    if (target.role === 'creator') return;                        // can never ban creator
-    if (target.role === 'mod' && me.role === 'mod') return;      // mods can't ban mods
-
-    if (!rolesData.bannedClientIds.some(b => b.clientId === target.clientId)) {
-      rolesData.bannedClientIds.push({ clientId: target.clientId, name: target.name });
-    }
-    rolesData.modClientIds = rolesData.modClientIds.filter(id => id !== target.clientId);
-    saveRoles();
-
+    const self = me(), target = P()[targetId];
+    if (!self || !target) return;
+    if (self.role !== 'creator' && self.role !== 'mod') return;
+    if (target.role === 'creator') return;
+    if (target.role === 'mod' && self.role === 'mod') return;
+    const rd = R().rolesData;
+    if (!rd.bannedClientIds.some(b => b.clientId === target.clientId)) rd.bannedClientIds.push({ clientId: target.clientId, name: target.name });
+    rd.modClientIds = rd.modClientIds.filter(id => id !== target.clientId);
+    saveRolesForRoom(socket.data.roomId);
     io.to(targetId).emit('kicked', { reason: 'You have been banned from this space.' });
-    socket.broadcast.emit('playerLeft', { id: targetId });
-    const targetSocket = io.sockets.sockets.get(targetId);
-    if (targetSocket) targetSocket.disconnect();
+    bcast('playerLeft', { id: targetId });
+    io.sockets.sockets.get(targetId)?.disconnect();
   });
-
   socket.on('unbanPlayer', ({ clientId }) => {
-    const me = players[socket.id];
-    if (!me || me.role !== 'creator') return;
-    rolesData.bannedClientIds = rolesData.bannedClientIds.filter(b => b.clientId !== clientId);
-    saveRoles();
-    socket.emit('bannedListUpdated', { bannedList: rolesData.bannedClientIds });
+    const self = me(); if (!self || self.role !== 'creator') return;
+    const rd = R().rolesData;
+    rd.bannedClientIds = rd.bannedClientIds.filter(b => b.clientId !== clientId);
+    saveRolesForRoom(socket.data.roomId);
+    socket.emit('bannedListUpdated', { bannedList: rd.bannedClientIds });
   });
-
   socket.on('getBannedList', () => {
-    const me = players[socket.id];
-    if (!me || (me.role !== 'creator' && me.role !== 'mod')) return;
-    socket.emit('bannedListUpdated', { bannedList: rolesData.bannedClientIds });
+    const self = me(); if (!self || (self.role !== 'creator' && self.role !== 'mod')) return;
+    socket.emit('bannedListUpdated', { bannedList: R().rolesData.bannedClientIds });
   });
 
-  // ── DIY layout sync (creator only) ─────────────────────
+  // ── DIY layout sync ───────────────────────────────────────
   socket.on('saveDIYLayout', ({ items }) => {
-    const me = players[socket.id];
-    if (!me || me.role !== 'creator') return;
+    const self = me(); if (!self || self.role !== 'creator') return;
     if (!Array.isArray(items)) return;
-    roomLayout = items;
-    // Broadcast to all OTHER players so they see the updated room
-    socket.broadcast.emit('roomLayout', roomLayout);
+    R().roomLayout = items;
+    bcast('roomLayout', items);
   });
 
-  // ── Appearance update ───────────────────────────────────
+  // ── Appearance ────────────────────────────────────────────
   socket.on('updateAppearance', ({ gender, shirtColor }) => {
-    const p = players[socket.id];
-    if (!p) return;
-    const safeGender = gender === 'female' ? 'female' : 'male';
-    const safeColor  = ['blue','red','green','purple'].includes(shirtColor) ? shirtColor : 'blue';
-    p.gender = safeGender;
-    p.shirtColor = safeColor;
-    socket.broadcast.emit('playerAppearanceUpdated', { id: socket.id, gender: safeGender, shirtColor: safeColor });
+    const p = me(); if (!p) return;
+    p.gender = gender === 'female' ? 'female' : 'male';
+    p.shirtColor = ['blue','red','green','purple'].includes(shirtColor) ? shirtColor : 'blue';
+    bcast('playerAppearanceUpdated', { id: socket.id, gender: p.gender, shirtColor: p.shirtColor });
   });
 
-  // ── Clear all shared tasks ──────────────────────────────
-  socket.on('clearAllTasks', () => {
-    const me = players[socket.id];
-    if (!me || (me.role !== 'creator' && me.role !== 'mod')) return;
-    globalTasks = [];
-    saveTasks();
-    io.emit('allTasksCleared');
-  });
-
-  // ── Chair sit / stand (server-authoritative) ─────────────
+  // ── Chair sit / stand ─────────────────────────────────────
   socket.on('sitDown', ({ chairId }) => {
     const safeId = String(chairId).slice(0, 32);
-    if (seatOccupancy[safeId] && seatOccupancy[safeId] !== socket.id) {
-      socket.emit('sitRejected', { chairId: safeId });
-      return;
-    }
-    // Free own old seat if any
-    for (const [cid, sid] of Object.entries(seatOccupancy)) {
-      if (sid === socket.id) { delete seatOccupancy[cid]; socket.broadcast.emit('chairFreed', { chairId: cid }); break; }
-    }
-    seatOccupancy[safeId] = socket.id;
-    socket.broadcast.emit('chairTaken', { chairId: safeId });
+    const seats = R()?.seatOccupancy; if (!seats) return;
+    if (seats[safeId] && seats[safeId] !== socket.id) { socket.emit('sitRejected', { chairId: safeId }); return; }
+    for (const [cid, sid] of Object.entries(seats)) { if (sid === socket.id) { delete seats[cid]; bcast('chairFreed', { chairId: cid }); break; } }
+    seats[safeId] = socket.id;
+    bcast('chairTaken', { chairId: safeId });
   });
-
   socket.on('standUp', ({ chairId }) => {
     const safeId = String(chairId).slice(0, 32);
-    if (seatOccupancy[safeId] === socket.id) {
-      delete seatOccupancy[safeId];
-      socket.broadcast.emit('chairFreed', { chairId: safeId });
-    }
+    const seats = R()?.seatOccupancy; if (!seats) return;
+    if (seats[safeId] === socket.id) { delete seats[safeId]; bcast('chairFreed', { chairId: safeId }); }
   });
 
-  // ── Per-player call signaling ────────────────────────────
+  // ── Call signaling ────────────────────────────────────────
   socket.on('callRequest', ({ toId }) => {
-    const me = players[socket.id];
-    const target = players[toId];
-    if (!me || !target) return;
+    const self = me(), target = P()[toId]; if (!self || !target) return;
     const callId = _makeCallId();
-    activeCalls[callId] = { participants: [socket.id] };
+    R().activeCalls[callId] = { participants: [socket.id] };
     socket.emit('callCreated', { callId, toId });
-    io.to(toId).emit('incomingCall', { callId, fromId: socket.id, fromName: me.name });
+    io.to(toId).emit('incomingCall', { callId, fromId: socket.id, fromName: self.name });
   });
-
   socket.on('callAccept', ({ callId }) => {
-    const me = players[socket.id];
-    if (!me || !activeCalls[callId]) return;
-    const call = activeCalls[callId];
+    const self = me(); if (!self) return;
+    const call = R()?.activeCalls[callId]; if (!call) return;
     const others = [...call.participants];
     call.participants.push(socket.id);
-    // Tell accepter who is already in the call (they will offer to those people)
     socket.emit('callJoined', { callId, participants: others });
-    // Tell everyone already in the call that this person joined (they wait for offer)
-    others.forEach(pid => {
-      io.to(pid).emit('callParticipantJoined', { callId, peerId: socket.id, peerName: me.name });
-    });
+    others.forEach(pid => io.to(pid).emit('callParticipantJoined', { callId, peerId: socket.id, peerName: self.name }));
   });
-
   socket.on('callDecline', ({ callId }) => {
-    const call = activeCalls[callId];
-    const me = players[socket.id];
-    if (!call) return;
-    call.participants.forEach(pid => {
-      io.to(pid).emit('callDeclined', { callId, byId: socket.id, byName: me?.name || '?' });
-    });
-    // If caller is alone waiting, clean up the call
-    if (call.participants.length <= 1) delete activeCalls[callId];
+    const call = R()?.activeCalls[callId]; if (!call) return;
+    call.participants.forEach(pid => io.to(pid).emit('callDeclined', { callId, byId: socket.id, byName: me()?.name || '?' }));
+    if (call.participants.length <= 1) delete R().activeCalls[callId];
   });
-
   socket.on('callLeave', ({ callId }) => {
-    const call = activeCalls[callId];
-    if (!call) return;
+    const calls = R()?.activeCalls; if (!calls || !calls[callId]) return;
+    const call = calls[callId];
     call.participants = call.participants.filter(id => id !== socket.id);
-    call.participants.forEach(pid => {
-      io.to(pid).emit('callParticipantLeft', { callId, peerId: socket.id });
-    });
-    if (call.participants.length === 0) {
-      delete activeCalls[callId];
-    } else if (call.participants.length === 1) {
-      io.to(call.participants[0]).emit('callEnded', { callId });
-      delete activeCalls[callId];
-    }
+    call.participants.forEach(pid => io.to(pid).emit('callParticipantLeft', { callId, peerId: socket.id }));
+    if (call.participants.length === 0) { delete calls[callId]; }
+    else if (call.participants.length === 1) { io.to(call.participants[0]).emit('callEnded', { callId }); delete calls[callId]; }
   });
-
   socket.on('callInvite', ({ callId, toId }) => {
-    const me = players[socket.id];
-    const target = players[toId];
-    const call = activeCalls[callId];
-    if (!me || !target || !call) return;
-    if (!call.participants.includes(socket.id)) return;
-    io.to(toId).emit('incomingCall', { callId, fromId: socket.id, fromName: me.name });
+    const self = me(), target = P()[toId], call = R()?.activeCalls[callId];
+    if (!self || !target || !call || !call.participants.includes(socket.id)) return;
+    io.to(toId).emit('incomingCall', { callId, fromId: socket.id, fromName: self.name });
   });
+  socket.on('callOffer',  ({ toId, offer })     => { if (me() && P()[toId]) io.to(toId).emit('callOffer',  { fromId: socket.id, offer }); });
+  socket.on('callAnswer', ({ toId, answer })    => { if (me() && P()[toId]) io.to(toId).emit('callAnswer', { fromId: socket.id, answer }); });
+  socket.on('callIce',    ({ toId, candidate }) => { if (me() && P()[toId]) io.to(toId).emit('callIce',    { fromId: socket.id, candidate }); });
 
-  // WebRTC relay for calls
-  socket.on('callOffer', ({ toId, offer }) => {
-    if (!players[socket.id] || !players[toId]) return;
-    io.to(toId).emit('callOffer', { fromId: socket.id, offer });
-  });
-  socket.on('callAnswer', ({ toId, answer }) => {
-    if (!players[socket.id] || !players[toId]) return;
-    io.to(toId).emit('callAnswer', { fromId: socket.id, answer });
-  });
-  socket.on('callIce', ({ toId, candidate }) => {
-    if (!players[socket.id] || !players[toId]) return;
-    io.to(toId).emit('callIce', { fromId: socket.id, candidate });
-  });
-
-  // ── Disconnect ───────────────────────────────────────────
+  // ── Disconnect ────────────────────────────────────────────
   socket.on('disconnect', () => {
     console.log('Player disconnected:', socket.id);
-    const player = players[socket.id];
+    const rs = socket.data.roomId ? getRoomState(socket.data.roomId) : null;
+    if (!rs) return;
+    const player = rs.players[socket.id];
     if (player) {
-      // Notify friends that this player went offline
       for (const friendId of player.friends) {
         io.to(friendId).emit('friendWentOffline', { id: socket.id });
-        // Remove stale ID from each friend's friends array
-        if (players[friendId]) {
-          players[friendId].friends = players[friendId].friends.filter(id => id !== socket.id);
-        }
+        if (rs.players[friendId]) rs.players[friendId].friends = rs.players[friendId].friends.filter(id => id !== socket.id);
       }
     }
-    // Clean up any active calls this player was in
-    for (const [callId, call] of Object.entries(activeCalls)) {
+    for (const [callId, call] of Object.entries(rs.activeCalls)) {
       if (!call.participants.includes(socket.id)) continue;
       call.participants = call.participants.filter(id => id !== socket.id);
       call.participants.forEach(pid => io.to(pid).emit('callParticipantLeft', { callId, peerId: socket.id }));
-      if (call.participants.length === 0) {
-        delete activeCalls[callId];
-      } else if (call.participants.length === 1) {
-        io.to(call.participants[0]).emit('callEnded', { callId });
-        delete activeCalls[callId];
-      }
+      if (call.participants.length === 0) { delete rs.activeCalls[callId]; }
+      else if (call.participants.length === 1) { io.to(call.participants[0]).emit('callEnded', { callId }); delete rs.activeCalls[callId]; }
     }
-    // Free any held chair
-    for (const [cid, sid] of Object.entries(seatOccupancy)) {
-      if (sid === socket.id) { delete seatOccupancy[cid]; socket.broadcast.emit('chairFreed', { chairId: cid }); break; }
+    for (const [cid, sid] of Object.entries(rs.seatOccupancy)) {
+      if (sid === socket.id) { delete rs.seatOccupancy[cid]; socket.to(socket.data.roomId).emit('chairFreed', { chairId: cid }); break; }
     }
-    socket.broadcast.emit('playerLeft', { id: socket.id });
-    delete players[socket.id];
-    // Also clean up any lingering clientId mapping
-    for (const [cid, sid] of Object.entries(clientIdMap)) {
-      if (sid === socket.id) { delete clientIdMap[cid]; break; }
-    }
-    io.emit('playerCount', Object.keys(players).length);
+    socket.to(socket.data.roomId).emit('playerLeft', { id: socket.id });
+    delete rs.players[socket.id];
+    for (const [cid, sid] of Object.entries(rs.clientIdMap)) { if (sid === socket.id) { delete rs.clientIdMap[cid]; break; } }
+    io.to(socket.data.roomId).emit('playerCount', Object.keys(rs.players).length);
   });
 });
 

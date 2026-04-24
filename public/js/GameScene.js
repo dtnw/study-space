@@ -92,21 +92,30 @@ class GameScene extends Phaser.Scene {
     this._gender = gender;
 
     // ── Room (draw order = z depth) ────────────────────────
-    this._createFloor();
-    this._createRug();
-    this._createFurniture();
-    this._buildGym();
-    this._buildBathroom();
-    this._buildLaundry();
-    this._buildHorizontalPartition();
-    this._buildKitchen();
-    this._createWalls();
-    this._createWallDecor();
+    if (window.__ROOM_THEME__ === 'cafe') {
+      this._buildCafeRoom();
+    } else {
+      this._createFloor();
+      this._createRug();
+      this._createFurniture();
+      this._buildGym();
+      this._buildBathroom();
+      this._buildLaundry();
+      this._buildHorizontalPartition();
+      this._buildKitchen();
+      this._createWalls();
+      this._createWallDecor();
+    }
 
     // ── Player ─────────────────────────────────────────────
     window.PixelSprites.createAllTextures(this);
     this._setupAnimations(gender);
     this._createPlayer(gender);
+
+    // ── Café static colliders (must run after player exists) ──
+    if (window.__ROOM_THEME__ === 'cafe') {
+      this._addCafeColliders();
+    }
 
     // ── Input ──────────────────────────────────────────────
     this.cursors = this.input.keyboard.createCursorKeys();
@@ -241,6 +250,376 @@ class GameScene extends Phaser.Scene {
   }
 
   // ── Room construction ─────────────────────────────────────────────────────
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CAFÉ ROOM — DerRizzMachine's Cozy Café
+  // Canvas 1100×800 | floor y=96..764, counter x=700..1068 y=96..200
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  _buildCafeRoom() {
+    this._buildCafeFloor();
+    this._buildCafeBackWall();
+    this._buildCafeOuterWalls();
+    this._buildCafeWindows();
+    this._buildCafeCounter();
+    this._buildCafeChalkboard();
+    this._buildCafeTables();
+    this._buildCafeDecor();
+  }
+
+  _buildCafeFloor() {
+    const g = this.add.graphics();
+    // Base warm honey-wood fill
+    g.fillStyle(0xC17F4A); g.fillRect(32, 96, 1036, 668);
+    // Horizontal plank lines (alternating slightly darker tone)
+    const plankH = 20;
+    for (let py = 96; py < 764; py += plankH * 2) {
+      g.fillStyle(0xB56B35, 0.45); g.fillRect(32, py, 1036, plankH);
+    }
+    // Thin dark grain lines between planks
+    g.fillStyle(0x6B3A1A, 0.6);
+    for (let py = 96; py < 764; py += plankH) {
+      g.fillRect(32, py, 1036, 1);
+    }
+    // Vertical board joints (offset every other row for realism)
+    g.fillStyle(0x6B3A1A, 0.3);
+    for (let row = 0; row * plankH < 668; row++) {
+      const offsetX = (row % 2 === 0) ? 0 : 80;
+      for (let px = 32 + offsetX; px < 1068; px += 160) {
+        g.fillRect(px, 96 + row * plankH, 1, plankH);
+      }
+    }
+    // Near-edge shadow at south wall
+    g.fillStyle(0x3A1F08, 0.25); g.fillRect(32, 748, 1036, 16);
+    g.setDepth(0);
+  }
+
+  _buildCafeBackWall() {
+    const g = this.add.graphics();
+    // Brick wall: y=32..96
+    const mortar = 0xD4B08A, brickA = 0x9B5040, brickB = 0xA06050;
+    g.fillStyle(mortar); g.fillRect(0, 32, 1100, 64);
+    // Brick pattern — 4 rows × staggered
+    const bW = 48, bH = 14, bGap = 2;
+    for (let row = 0; row < 4; row++) {
+      const by = 34 + row * (bH + bGap);
+      const offsetX = (row % 2 === 0) ? 0 : bW / 2;
+      const col = row % 2 === 0 ? brickA : brickB;
+      g.fillStyle(col);
+      for (let bx = -bW + offsetX; bx < 1100; bx += bW + bGap) {
+        g.fillRect(bx + 1, by, bW - 1, bH);
+      }
+    }
+    // Cornice front face at y=96
+    g.fillStyle(0x5A3520); g.fillRect(0, 92, 1100, 12);
+    g.fillStyle(0x7A5035); g.fillRect(0, 93, 1100, 6);
+    // Thin highlight stripe at base of cornice
+    g.fillStyle(0xDDB07A); g.fillRect(0, 99, 1100, 2);
+    g.setDepth(2);
+  }
+
+  _buildCafeOuterWalls() {
+    const g = this.add.graphics();
+    // Left wall panel
+    g.fillStyle(0x3A2210); g.fillRect(0, 96, 32, 668);
+    g.fillStyle(0x5A3520); g.fillRect(28, 96, 4, 668);
+    // Right wall panel
+    g.fillStyle(0x3A2210); g.fillRect(1068, 96, 32, 668);
+    g.fillStyle(0x5A3520); g.fillRect(1068, 96, 4, 668);
+    // South/bottom wall
+    g.fillStyle(0x3A2210); g.fillRect(0, 764, 1100, 36);
+    g.fillStyle(0x5A3520); g.fillRect(32, 760, 1036, 4);
+    // Baseboard strip
+    g.fillStyle(0x2A1808); g.fillRect(32, 752, 1036, 8);
+    g.setDepth(3);
+  }
+
+  _buildCafeWindows() {
+    // Two arched windows on the back wall
+    const windows = [{ x: 160, w: 160 }, { x: 420, w: 160 }];
+    windows.forEach(({ x, w }) => {
+      const g = this.add.graphics();
+      const h = 54, wy = 38;
+      // Window sill + frame (dark wood)
+      g.fillStyle(0x3A2210); g.fillRect(x - 4, wy - 4, w + 8, h + 8);
+      // Window glass (pale sky blue)
+      g.fillStyle(0xA8C8E8, 0.85); g.fillRect(x, wy, w, h);
+      // Soft light reflection in glass
+      g.fillStyle(0xDDE8F0, 0.4); g.fillRect(x + 4, wy + 4, w / 3, h - 8);
+      // Horizontal divider
+      g.fillStyle(0x5A3520); g.fillRect(x, wy + h / 2 - 1, w, 3);
+      // Vertical divider
+      g.fillStyle(0x5A3520); g.fillRect(x + w / 2 - 1, wy, 3, h);
+      // Curtains (warm amber fabric, slightly draped on sides)
+      g.fillStyle(0xD4822A, 0.9);
+      g.fillRect(x - 4,       wy - 4, 16, h + 8); // left curtain
+      g.fillRect(x + w - 12,  wy - 4, 16, h + 8); // right curtain
+      // Curtain fold lines
+      g.fillStyle(0xB06020, 0.5);
+      g.fillRect(x - 2, wy,      3, h);
+      g.fillRect(x + w - 6, wy,  3, h);
+      g.setDepth(3);
+    });
+  }
+
+  _buildCafeCounter() {
+    const g = this.add.graphics();
+    // Counter occupies top-right: x=700..1068, y=96..200
+    const cx = 700, cy = 96, cw = 368, ch = 104;
+
+    // Cabinet body (dark espresso wood)
+    g.fillStyle(0x2C1A10); g.fillRect(cx, cy, cw, ch);
+    // Wood grain on cabinet
+    g.fillStyle(0x3A2218, 0.6);
+    for (let gx = cx + 20; gx < cx + cw; gx += 32) {
+      g.fillRect(gx, cy, 1, ch);
+    }
+    // Cabinet door panels
+    g.fillStyle(0x3D2318);
+    [[cx + 8, cy + 8, 60, ch - 16], [cx + 76, cy + 8, 60, ch - 16],
+     [cx + 144, cy + 8, 60, ch - 16], [cx + 212, cy + 8, 60, ch - 16],
+     [cx + 280, cy + 8, 60, ch - 16]].forEach(([px, py, pw, ph]) => {
+      g.fillRect(px, py, pw, ph);
+    });
+    // Door knobs
+    g.fillStyle(0xC8A050);
+    [[cx + 62, cy + ch / 2], [cx + 130, cy + ch / 2],
+     [cx + 198, cy + ch / 2], [cx + 266, cy + ch / 2],
+     [cx + 334, cy + ch / 2]].forEach(([kx, ky]) => {
+      g.fillRect(kx - 3, ky - 3, 6, 6);
+    });
+    // Countertop surface (light marble/cream, slightly overhanging)
+    g.fillStyle(0xE8DCC8); g.fillRect(cx - 4, cy + ch - 16, cw + 8, 20);
+    g.fillStyle(0xD0C4A8); g.fillRect(cx - 4, cy + ch + 4,  cw + 8, 3);
+    // Subtle marble veins
+    g.fillStyle(0xC8B898, 0.4);
+    g.fillRect(cx + 30,  cy + ch - 14, 80, 1);
+    g.fillRect(cx + 150, cy + ch - 12, 60, 1);
+    g.fillRect(cx + 250, cy + ch - 15, 90, 1);
+
+    g.setDepth(cy + ch + 4);
+
+    // ── Espresso machine ──────────────────────────────────────
+    const eg = this.add.graphics();
+    const ex = cx + 20, ey = cy + 20;
+    // Machine body
+    eg.fillStyle(0x1A1A1A); eg.fillRect(ex, ey, 64, 56);
+    eg.fillStyle(0x2A2A2A); eg.fillRect(ex + 4, ey + 4, 56, 48);
+    // Boiler dome
+    eg.fillStyle(0xC0B060); eg.fillRect(ex + 16, ey - 12, 32, 14);
+    eg.fillStyle(0xD0C070); eg.fillRect(ex + 18, ey - 10, 28, 10);
+    // Pressure gauge
+    eg.fillStyle(0x888880); eg.fillRect(ex + 8,  ey + 8, 16, 16);
+    eg.fillStyle(0x202020); eg.fillRect(ex + 10, ey + 10, 12, 12);
+    eg.fillStyle(0xFF4444); eg.fillRect(ex + 14, ey + 14,  4,  6);
+    // Group head (portafilter holder)
+    eg.fillStyle(0x888880); eg.fillRect(ex + 30, ey + 28, 20, 16);
+    eg.fillStyle(0xA09090); eg.fillRect(ex + 32, ey + 30, 16, 12);
+    // Steam wand
+    eg.fillStyle(0x888880); eg.fillRect(ex + 54, ey + 18, 4, 28);
+    eg.fillRect(ex + 50, ey + 42, 12, 4);
+    // Cup below portafilter
+    eg.fillStyle(0xF5F0E8); eg.fillRect(ex + 32, ey + 46, 16, 10);
+    eg.fillStyle(0x4A2010); eg.fillRect(ex + 34, ey + 48, 12, 6);
+    eg.setDepth(cy + ch + 5);
+
+    // ── Espresso machine interaction zone ──────────────────
+    this._coffeeMachineZone = { x: ex + 32, y: cy + ch + 50, r: 72 };
+
+    // ── Stools in front of counter ─────────────────────────
+    const stoolXs = [750, 840, 930];
+    stoolXs.forEach((sx, i) => {
+      const sg = this.add.graphics();
+      const sy = cy + ch + 10;
+      // Stool legs
+      sg.fillStyle(0x5A3520);
+      sg.fillRect(sx + 4,  sy + 14, 4, 22);
+      sg.fillRect(sx + 20, sy + 14, 4, 22);
+      sg.fillRect(sx + 4,  sy + 30, 20, 3);
+      // Stool seat (round-ish, warm caramel leather)
+      sg.fillStyle(0xC07040); sg.fillRect(sx,     sy,      28, 14);
+      sg.fillStyle(0xD08050); sg.fillRect(sx + 2, sy + 2,  24, 10);
+      sg.fillStyle(0xB06030); sg.fillRect(sx,     sy + 12, 28, 2);
+      sg.setDepth(sy + 30);
+
+      // Stool as a sit-able "chair"
+      const stoolId = `cafe-stool-${i}`;
+      this.chairs.push({
+        id: stoolId, seatX: sx + 14, seatY: sy + 6, side: 'south', occupied: false,
+      });
+    });
+  }
+
+  _buildCafeChalkboard() {
+    const g = this.add.graphics();
+    const bx = 44, by = 108, bw = 200, bh = 152;
+    // Outer frame (dark espresso wood)
+    g.fillStyle(0x2C1A10); g.fillRect(bx - 6, by - 6, bw + 12, bh + 12);
+    // Board surface (dark green)
+    g.fillStyle(0x1A3325); g.fillRect(bx, by, bw, bh);
+    // Subtle green variation for texture
+    g.fillStyle(0x1E3D2C, 0.5); g.fillRect(bx + 2, by + 2, bw - 4, bh - 4);
+    // Title line (simulated chalk text as rectangles)
+    g.fillStyle(0xEEE8D8, 0.9);
+    // "MENU" title
+    const _chalkLine = (gfx, x, y, text) => {
+      // Approximate pixel-font style using small rectangles
+      let ox = x;
+      for (let ch of text) {
+        gfx.fillRect(ox, y, 5, 1); ox += 7;
+      }
+      gfx.fillRect(x, y, text.length * 7 - 2, 2); // underline
+    };
+    g.fillRect(bx + 70,  by + 8,  60, 8);  // MENU header bar
+    g.fillRect(bx + 74,  by + 12, 52, 3);  // underline
+    // Menu item lines (chalk-style horizontal dashes)
+    g.fillStyle(0xDDD8C8, 0.7);
+    [[bx + 12, by + 30, 90], [bx + 12, by + 46, 76],
+     [bx + 12, by + 62, 84], [bx + 12, by + 78, 70],
+     [bx + 12, by + 94, 88], [bx + 12, by + 110, 64]].forEach(([lx, ly, lw]) => {
+      g.fillRect(lx, ly, lw, 5);     // item name bar
+      g.fillRect(lx + lw + 8, ly, 20, 5); // price bar
+    });
+    // Decorative border lines on board
+    g.fillStyle(0x2E4D38, 0.8);
+    g.fillRect(bx + 4, by + 4, bw - 8, 2);
+    g.fillRect(bx + 4, by + bh - 6, bw - 8, 2);
+    g.fillRect(bx + 4, by + 4, 2, bh - 8);
+    g.fillRect(bx + bw - 6, by + 4, 2, bh - 8);
+    // Chalk tray at bottom of board
+    g.fillStyle(0x4A3020); g.fillRect(bx - 6, by + bh + 6, bw + 12, 8);
+    g.fillStyle(0xDDD8C8, 0.5); g.fillRect(bx + 10, by + bh + 8, 20, 3);
+    g.fillStyle(0xF0D8B0, 0.5); g.fillRect(bx + 40, by + bh + 8, 15, 3);
+    g.setDepth(3);
+  }
+
+  _buildCafeTables() {
+    // Round café tables with 2 chairs each
+    // Layout: 3 rows of 3 tables
+    const tableDefs = [
+      // Row 1 (y ≈ 330) — clear of chalkboard/counter (≤ y=274) with north-chair gap
+      { x: 220, y: 340 }, { x: 480, y: 320 }, { x: 760, y: 320 },
+      // Row 2 (y ≈ 490)
+      { x: 300, y: 490 }, { x: 580, y: 490 }, { x: 870, y: 490 },
+      // Row 3 (y ≈ 650)
+      { x: 180, y: 650 }, { x: 480, y: 650 }, { x: 760, y: 650 },
+    ];
+
+    tableDefs.forEach(({ x, y }, idx) => {
+      // Table top
+      const tg = this.add.graphics();
+      const tw = 64, th = 40;
+      // Table leg(s)
+      tg.fillStyle(0x3A2210);
+      tg.fillRect(x + tw / 2 - 4, y + th, 8, 20);    // single pedestal
+      tg.fillRect(x + tw / 2 - 16, y + th + 16, 32, 4); // foot
+      // Tabletop surface (dark espresso)
+      tg.fillStyle(0x4A2E18); tg.fillRect(x, y, tw, th);
+      tg.fillStyle(0x5C3A22); tg.fillRect(x + 2, y + 2, tw - 4, th - 4);
+      // Table top highlight
+      tg.fillStyle(0x7A5030, 0.5); tg.fillRect(x + 4, y + 4, tw - 30, th - 16);
+      // Small cup/item on table (decorative)
+      if (idx % 3 === 0) {
+        // flower vase
+        tg.fillStyle(0xD08060); tg.fillRect(x + tw - 18, y + 8, 8, 12);
+        tg.fillStyle(0xF0A0A0); tg.fillRect(x + tw - 17, y + 4, 6, 6);
+      } else if (idx % 3 === 1) {
+        // coffee cup
+        tg.fillStyle(0xF0ECE0); tg.fillRect(x + tw - 20, y + 10, 12, 10);
+        tg.fillStyle(0x3A1808); tg.fillRect(x + tw - 19, y + 12, 10, 6);
+        tg.fillStyle(0xE0DCD0); tg.fillRect(x + tw - 8, y + 14, 4, 4);
+      } else {
+        // small plant/succulent
+        tg.fillStyle(0x4A6830); tg.fillRect(x + tw - 16, y + 12, 8, 10);
+        tg.fillStyle(0x6A9040); tg.fillRect(x + tw - 18, y + 8, 12, 6);
+      }
+      tg.setDepth(y + th + 2);
+
+      // North chair (faces south)
+      const nc = new Furniture.Chair(this, x + tw / 2 - 16, y - 40, 'north');
+      nc.graphics.setDepth(y - 40 + 36);
+      const ncId = `cafe-tbl${idx}-n`;
+      this.chairs.push({ id: ncId, seatX: x + tw / 2, seatY: y - 28, side: 'north', occupied: false });
+
+      // South chair (faces north)
+      const sc = new Furniture.Chair(this, x + tw / 2 - 16, y + th + 8, 'south');
+      sc.graphics.setDepth(y + th + 8 + 36);
+      const scId = `cafe-tbl${idx}-s`;
+      this.chairs.push({ id: scId, seatX: x + tw / 2, seatY: y + th + 20, side: 'south', occupied: false });
+    });
+  }
+
+  _buildCafeDecor() {
+    // Corner plants
+    [[44, 116], [1024, 116], [44, 700], [1024, 700]].forEach(([px, py]) => {
+      const pg = this.add.graphics();
+      // Pot
+      pg.fillStyle(0xC07840); pg.fillRect(px, py + 28, 24, 20);
+      pg.fillStyle(0xA06030); pg.fillRect(px + 2, py + 30, 20, 16);
+      pg.fillStyle(0x4A2810); pg.fillRect(px - 2, py + 26, 28, 5);
+      // Foliage
+      pg.fillStyle(0x2A5020); pg.fillRect(px - 8, py, 40, 30);
+      pg.fillStyle(0x3A6828); pg.fillRect(px - 4, py + 4, 32, 22);
+      pg.fillStyle(0x4A8030); pg.fillRect(px,     py + 8, 24, 14);
+      // Stem dots
+      pg.fillStyle(0x5A9838);
+      pg.fillRect(px + 12, py + 22, 3, 8);
+      pg.setDepth(py + 48);
+    });
+
+    // Wall sconce lights (decorative warm glow patches)
+    [130, 380, 640].forEach(sx => {
+      const lg = this.add.graphics();
+      // Sconce bracket
+      lg.fillStyle(0x5A3520); lg.fillRect(sx - 6, 98, 12, 16);
+      lg.fillStyle(0x4A2810); lg.fillRect(sx - 4, 100, 8, 12);
+      // Lamp shade
+      lg.fillStyle(0xD4A040, 0.95); lg.fillRect(sx - 14, 88, 28, 12);
+      lg.fillStyle(0xE8C060, 0.7);  lg.fillRect(sx - 10, 90, 20, 8);
+      // Warm glow ellipse (fake glow with opaque rects)
+      lg.fillStyle(0xF0D070, 0.15); lg.fillRect(sx - 30, 96, 60, 24);
+      lg.setDepth(3);
+    });
+
+    // Hanging pendant lights over tables
+    [[252, 260], [512, 240], [792, 240],
+     [332, 420], [612, 420], [902, 420]].forEach(([px, py]) => {
+      const pg = this.add.graphics();
+      // Cord
+      pg.fillStyle(0x2A1808); pg.fillRect(px, 96, 2, py - 96);
+      // Pendant shade
+      pg.fillStyle(0x3A2210); pg.fillRect(px - 12, py,      24, 16);
+      pg.fillStyle(0x1A1008); pg.fillRect(px - 12, py,      24, 6);
+      pg.fillStyle(0xF0D070, 0.8); pg.fillRect(px - 8,  py + 6, 16, 8);
+      // Glow below pendant
+      pg.fillStyle(0xF0D070, 0.08); pg.fillRect(px - 30, py + 14, 60, 30);
+      pg.setDepth(py + 16);
+    });
+
+    // Small "Welcome" sign by door area (south wall)
+    const sg = this.add.graphics();
+    sg.fillStyle(0x5A3520); sg.fillRect(490, 750, 120, 16);
+    sg.fillStyle(0x3A2210); sg.fillRect(492, 752, 116, 12);
+    sg.fillStyle(0xF5E8C8, 0.9);
+    // Dots representing "WELCOME" text
+    [0,1,2,3,4,5,6].forEach(ci => {
+      sg.fillRect(498 + ci * 16, 755, 10, 5);
+    });
+    sg.setDepth(3);
+  }
+
+  _addCafeColliders() {
+    // Counter block: x=700..1068 (plus 4px overhang), y=96..210 — invisible static body
+    // Phaser rectangle uses center coords: center=(884,153), size=(376,114)
+    const counterRect = this.add.rectangle(884, 153, 376, 114).setVisible(false);
+    this.physics.add.existing(counterRect, true);
+    this.physics.add.collider(this.player, counterRect);
+    // Chalkboard block: x=38..250, y=102..274 — keeps players from walking through the board
+    // center=(144,188), size=(212,172)
+    const boardRect = this.add.rectangle(144, 188, 212, 172).setVisible(false);
+    this.physics.add.existing(boardRect, true);
+    this.physics.add.collider(this.player, boardRect);
+  }
 
   _createFloor() {
     // Feature 1: solid single-colour floor for study
@@ -1065,13 +1444,21 @@ class GameScene extends Phaser.Scene {
     if (ptr.button === 2) { this.exitDIYPlacement(); return; }
     const x = Math.round(ptr.worldX / 16) * 16;
     const y = Math.round(ptr.worldY / 16) * 16;
-    // Updated room coordinates (Feature 2)
-    const inStudy   = x >= 64  && x <= 736  && y >= 360 && y <= 748;
-    const inKitchen = x >= 832 && x <= 1052 && y >= 360 && y <= 748;
-    const inLaundry = x >= 744 && x <= 1052 && y >= 48  && y <= 296;
-    const inGym     = x >= 64  && x <= 444  && y >= 48  && y <= 296;
-    const inBath    = x >= 508 && x <= 668  && y >= 48  && y <= 296;
-    if (!inStudy && !inKitchen && !inLaundry && !inGym && !inBath) return;
+    let inBounds;
+    if (window.__ROOM_THEME__ === 'cafe') {
+      // Café: full open floor, excluding the counter/back-wall area
+      inBounds = (x >= 64 && x <= 1036 && y >= 240 && y <= 748) ||
+                 (x >= 64 && x <= 668  && y >= 130 && y < 240);
+    } else {
+      // Study: updated room coordinates (Feature 2)
+      const inStudy   = x >= 64  && x <= 736  && y >= 360 && y <= 748;
+      const inKitchen = x >= 832 && x <= 1052 && y >= 360 && y <= 748;
+      const inLaundry = x >= 744 && x <= 1052 && y >= 48  && y <= 296;
+      const inGym     = x >= 64  && x <= 444  && y >= 48  && y <= 296;
+      const inBath    = x >= 508 && x <= 668  && y >= 48  && y <= 296;
+      inBounds = inStudy || inKitchen || inLaundry || inGym || inBath;
+    }
+    if (!inBounds) return;
     if (this._diyColliding) return;
     this._diyCreateItem(this.diyType, x, y, this.diyRotation);
     this._saveDIYLayout();
@@ -1287,8 +1674,12 @@ class GameScene extends Phaser.Scene {
     this.diyObjects.push(obj);
   }
 
+  _diyStorageKey() {
+    return 'studyspace_diy_' + (window.__ROOM_ID__ || 'derbysaren');
+  }
+
   _saveDIYLayout() {
-    try { localStorage.setItem('studyspace_diy', JSON.stringify(this.diyPlaced)); } catch (_) {}
+    try { localStorage.setItem(this._diyStorageKey(), JSON.stringify(this.diyPlaced)); } catch (_) {}
     // Sync to server so all players see the updated room
     window.socket?.emit('saveDIYLayout', { items: this.diyPlaced });
   }
@@ -1302,11 +1693,11 @@ class GameScene extends Phaser.Scene {
         try { this._diyCreateItem(type, cx, cy, rotation); } catch(_) {}
       });
       // Also update local cache
-      try { localStorage.setItem('studyspace_diy', JSON.stringify(this.diyPlaced)); } catch(_) {}
+      try { localStorage.setItem(this._diyStorageKey(), JSON.stringify(this.diyPlaced)); } catch(_) {}
       return;
     }
     try {
-      const raw = localStorage.getItem('studyspace_diy');
+      const raw = localStorage.getItem(this._diyStorageKey());
       if (!raw) return;
       JSON.parse(raw).forEach(({ type, cx, cy, rotation }) => {
         this._diyCreateItem(type, cx, cy, rotation);
@@ -1330,7 +1721,7 @@ class GameScene extends Phaser.Scene {
       try { this._diyCreateItem(type, cx, cy, rotation); } catch(_) {}
     });
     // Update local cache
-    try { localStorage.setItem('studyspace_diy', JSON.stringify(this.diyPlaced)); } catch(_) {}
+    try { localStorage.setItem(this._diyStorageKey(), JSON.stringify(this.diyPlaced)); } catch(_) {}
     this._buildChairGroups();
   }
 
