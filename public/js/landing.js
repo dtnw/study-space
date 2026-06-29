@@ -18,10 +18,11 @@
     const data = await res.json();
     localStorage.setItem('cc_session', JSON.stringify({
       name:        data.name,
-      twitchLogin: data.twitchLogin || null,
-      googleEmail: data.googleEmail || null,
-      profilePic:  data.profilePic  || null,
-      authType:    data.authType    || 'twitch',
+      twitchLogin: data.twitchLogin  || null,
+      twitchEmail: data.twitchEmail  || null,
+      googleEmail: data.googleEmail  || null,
+      profilePic:  data.profilePic   || null,
+      authType:    data.authType     || 'twitch',
       expiresAt:   Date.now() + 7 * 24 * 60 * 60 * 1000,
     }));
     _updateLandingHeader();
@@ -223,9 +224,13 @@ function enterSpace(path) {
     _showSignInPrompt(path);
     return;
   }
-  if (!session.gender || !session.shirtColor) {
-    _showAppearancePrompt(path);
-    return;
+  if (!session.gender) {
+    // Auto-assign appearance from name — no prompt needed
+    try {
+      const sess = JSON.parse(localStorage.getItem('cc_session') || '{}');
+      sess.gender = 'auto'; sess.shirtColor = 'auto';
+      localStorage.setItem('cc_session', JSON.stringify(sess));
+    } catch(_) {}
   }
   window.location.href = path;
 }
@@ -292,69 +297,21 @@ function _startOAuthSignIn(provider, targetPath) {
  * On save: updates cc_session, then navigates to targetPath (or stays if null).
  */
 function _showAppearancePrompt(targetPath) {
-  document.getElementById('appearance-prompt-modal')?.remove();
-
-  const modal = document.createElement('div');
-  modal.id = 'appearance-prompt-modal';
-  modal.className = 'lp-modal-overlay';
-  modal.innerHTML = `
-    <div class="lp-modal-box signin-prompt-box">
-      <h2 class="lp-modal-title">CUSTOMISE YOUR AVATAR</h2>
-      <p class="lp-modal-sub">Pick a look before you enter the space.</p>
-
-      <div class="lp-avatar-pick-row">
-        <button class="lp-gender-btn active" data-gender="male">BOY</button>
-        <button class="lp-gender-btn" data-gender="female">GIRL</button>
-      </div>
-      <div class="lp-color-pick-row">
-        <button class="lp-color-swatch active" data-color="blue"   style="background:#5b8fe0" title="Blue"></button>
-        <button class="lp-color-swatch"        data-color="red"    style="background:#e05b5b" title="Red"></button>
-        <button class="lp-color-swatch"        data-color="green"  style="background:#5be05b" title="Green"></button>
-        <button class="lp-color-swatch"        data-color="purple" style="background:#9b5be0" title="Purple"></button>
-      </div>
-
-      <button id="appearance-save-btn" class="lp-twitch-signin-btn" style="display:block;width:100%;margin-top:16px;border:none;cursor:pointer;font-family:var(--font)">✔ Save My Look${targetPath ? ' & Enter Space' : ''}</button>
-    </div>`;
-  document.body.appendChild(modal);
-  modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
-
-  let selectedGender = 'male';
-  let selectedColor  = 'blue';
-
-  modal.querySelectorAll('.lp-gender-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      modal.querySelectorAll('.lp-gender-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      selectedGender = btn.dataset.gender;
-    });
-  });
-  modal.querySelectorAll('.lp-color-swatch').forEach(sw => {
-    sw.addEventListener('click', () => {
-      modal.querySelectorAll('.lp-color-swatch').forEach(b => b.classList.remove('active'));
-      sw.classList.add('active');
-      selectedColor = sw.dataset.color;
-    });
-  });
-
-  modal.querySelector('#appearance-save-btn')?.addEventListener('click', () => {
-    const raw = localStorage.getItem('cc_session');
-    if (raw) {
-      try {
-        const sess = JSON.parse(raw);
-        sess.gender = selectedGender;
-        sess.shirtColor = selectedColor;
-        localStorage.setItem('cc_session', JSON.stringify(sess));
-      } catch(e) {}
-    }
-    modal.remove();
-    if (targetPath) {
-      window.location.href = targetPath;
-    } else {
-      // No target path — just update header and scroll to spaces
-      _updateLandingHeader();
-      document.getElementById('spaces-grid')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-  });
+  // Auto-assign appearance from name — no user picker needed
+  const raw = localStorage.getItem('cc_session');
+  if (raw) {
+    try {
+      const sess = JSON.parse(raw);
+      sess.gender = 'auto'; sess.shirtColor = 'auto';
+      localStorage.setItem('cc_session', JSON.stringify(sess));
+    } catch(_) {}
+  }
+  if (targetPath) {
+    window.location.href = targetPath;
+  } else {
+    _updateLandingHeader();
+    document.getElementById('spaces-grid')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
 }
 
 /**
@@ -366,13 +323,8 @@ function _showGuestNamePrompt(targetPath) {
   // Block creating a second identity if any session (guest or OAuth) already active
   const existing = _getSession();
   if (existing && existing.name) {
-    // Already have an identity — just enter the space if a path was given
-    if (existing.gender && existing.shirtColor) {
-      if (targetPath) window.location.href = targetPath;
-      else document.getElementById('spaces-grid')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    } else {
-      _showAppearancePrompt(targetPath);
-    }
+    if (targetPath) window.location.href = targetPath;
+    else document.getElementById('spaces-grid')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
   }
   document.getElementById('guest-name-modal')?.remove();
@@ -381,47 +333,18 @@ function _showGuestNamePrompt(targetPath) {
   modal.className = 'lp-modal-overlay';
   modal.innerHTML = `
     <div class="lp-modal-box signin-prompt-box">
-      <h2 class="lp-modal-title">CUSTOMISE YOUR AVATAR</h2>
-      <p class="lp-modal-sub">Pick a look, then enter your name.</p>
-
-      <div class="lp-avatar-pick-row">
-        <button class="lp-gender-btn active" data-gender="male">BOY</button>
-        <button class="lp-gender-btn" data-gender="female">GIRL</button>
-      </div>
-      <div class="lp-color-pick-row">
-        <button class="lp-color-swatch active" data-color="blue"   style="background:#5b8fe0" title="Blue"></button>
-        <button class="lp-color-swatch"        data-color="red"    style="background:#e05b5b" title="Red"></button>
-        <button class="lp-color-swatch"        data-color="green"  style="background:#5be05b" title="Green"></button>
-        <button class="lp-color-swatch"        data-color="purple" style="background:#9b5be0" title="Purple"></button>
-      </div>
+      <h2 class="lp-modal-title">ENTER THE SPACE</h2>
+      <p class="lp-modal-sub">Your character is auto-generated from your name.</p>
 
       <input type="text" id="guest-name-input" class="lp-name-input" placeholder="Enter your name…" maxlength="20" autocomplete="off" />
       <p id="guest-name-error" style="color:#ff6b6b;font-size:7px;min-height:14px;margin:4px 0 0;text-align:left"></p>
-      <button id="guest-name-submit" class="lp-twitch-signin-btn" style="display:block;width:100%;margin-top:8px;border:none;cursor:pointer;font-family:var(--font)">✔ Save My Look</button>
+      <button id="guest-name-submit" class="lp-twitch-signin-btn" style="display:block;width:100%;margin-top:8px;border:none;cursor:pointer;font-family:var(--font)">✔ Enter</button>
       <div style="text-align:center;margin-top:12px">
         <a href="#" id="guest-back-to-signin" class="lp-guest-link">← Back to sign in options</a>
       </div>
     </div>`;
   document.body.appendChild(modal);
   modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
-
-  let selectedGender = 'male';
-  let selectedColor  = 'blue';
-
-  modal.querySelectorAll('.lp-gender-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      modal.querySelectorAll('.lp-gender-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      selectedGender = btn.dataset.gender;
-    });
-  });
-  modal.querySelectorAll('.lp-color-swatch').forEach(sw => {
-    sw.addEventListener('click', () => {
-      modal.querySelectorAll('.lp-color-swatch').forEach(b => b.classList.remove('active'));
-      sw.classList.add('active');
-      selectedColor = sw.dataset.color;
-    });
-  });
 
   const input  = modal.querySelector('#guest-name-input');
   const errEl  = modal.querySelector('#guest-name-error');
@@ -434,7 +357,7 @@ function _showGuestNamePrompt(targetPath) {
     // Save guest session — stay on landing so they can click the room card themselves
     localStorage.setItem('cc_session', JSON.stringify({
       name, twitchLogin: null, googleEmail: null, profilePic: null,
-      authType: 'guest', gender: selectedGender, shirtColor: selectedColor,
+      authType: 'guest', gender: 'auto', shirtColor: 'auto',
       expiresAt: Date.now() + 24 * 60 * 60 * 1000,
     }));
     _updateLandingHeader();
@@ -490,21 +413,55 @@ try {
 _updateLandingHeader();
 
 function openCreatorModal() {
-  document.getElementById('creator-modal')?.classList.remove('hidden');
-  setTimeout(() => document.getElementById('creator-code-input')?.focus(), 50);
+  const modal = document.getElementById('creator-modal');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+  // Pre-fill from current session if signed in
+  const session = _getSession();
+  if (session) {
+    const nameEl   = document.getElementById('interest-name');
+    const emailEl  = document.getElementById('interest-email');
+    const twitchEl = document.getElementById('interest-twitch');
+    if (nameEl   && !nameEl.value   && session.name)        nameEl.value   = session.name;
+    if (emailEl  && !emailEl.value  && (session.twitchEmail || session.googleEmail))
+      emailEl.value = session.twitchEmail || session.googleEmail;
+    if (twitchEl && !twitchEl.value && session.twitchLogin) twitchEl.value = '@' + session.twitchLogin;
+  }
+  setTimeout(() => document.getElementById('interest-name')?.focus(), 50);
 }
 function closeCreatorModal() {
   document.getElementById('creator-modal')?.classList.add('hidden');
 }
-document.getElementById('creator-code-submit')?.addEventListener('click', async () => {
-  const code  = document.getElementById('creator-code-input')?.value.trim().toUpperCase();
-  const errEl = document.getElementById('creator-code-error');
-  if (!code) { if (errEl) errEl.textContent = 'Enter your invite code.'; return; }
+
+document.getElementById('interest-submit')?.addEventListener('click', async () => {
+  const name     = document.getElementById('interest-name')?.value.trim();
+  const email    = document.getElementById('interest-email')?.value.trim();
+  const twitch   = document.getElementById('interest-twitch')?.value.trim();
+  const spaceFor = document.querySelector('input[name="spaceFor"]:checked')?.value || null;
+  const message  = document.getElementById('interest-message')?.value.trim();
+  const errEl    = document.getElementById('interest-error');
+  const succEl   = document.getElementById('interest-success');
   if (errEl) errEl.textContent = '';
+  if (!email) { if (errEl) errEl.textContent = 'Please enter your email address.'; return; }
+  if (!spaceFor) { if (errEl) errEl.textContent = 'Please tell us who the space is for.'; return; }
+  const btn = document.getElementById('interest-submit');
+  if (btn) btn.disabled = true;
   try {
-    const res  = await fetch('/api/creator-codes/validate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) });
+    const res  = await fetch('/api/streamer-interest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, twitchHandle: twitch, spaceFor, message }),
+    });
     const data = await res.json();
-    if (!data.valid) { if (errEl) errEl.textContent = 'Invalid or already used code. Try again.'; return; }
-    window.location.href = '/auth/twitch?role=creator&return=/play';
-  } catch(e) { if (errEl) errEl.textContent = 'Network error. Try again.'; }
+    if (data.ok) {
+      if (succEl) succEl.classList.remove('hidden');
+      if (btn) btn.style.display = 'none';
+    } else {
+      if (errEl) errEl.textContent = data.error || 'Something went wrong. Try again.';
+      if (btn) btn.disabled = false;
+    }
+  } catch(e) {
+    if (errEl) errEl.textContent = 'Network error. Try again.';
+    if (btn) btn.disabled = false;
+  }
 });

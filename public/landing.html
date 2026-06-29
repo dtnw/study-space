@@ -6,7 +6,7 @@
   <title>Cozy Corner 🌷 — Study with Your Favorite Streamers</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/landing.css" />
+  <link rel="stylesheet" href="css/landing.css?v=3.15" />
 </head>
 <body>
   <canvas id="star-canvas"></canvas>
@@ -56,20 +56,48 @@
 
     <!-- Creator CTA -->
     <section class="lp-creator-section">
+      <div class="lp-creator-badge">🔒 Exclusive Early Access</div>
       <h2 class="lp-section-title"><span class="lp-section-title-text">Are You a Streamer?</span></h2>
-      <p class="lp-creator-desc">Build a cozy pixel study room for your community. Get early access with an invite code.</p>
-      <button class="pixel-btn lp-creator-btn" onclick="openCreatorModal()">✨ Create Your Corner</button>
+      <p class="lp-creator-desc">Would you like to create your own cozy space for your community and friends to hang out, study, and vibe together?</p>
+      <p class="lp-creator-perks-label">Sign up now and get:</p>
+      <ul class="lp-creator-perks">
+        <li>🎟️ A personal invite code to trial the app when it launches</li>
+        <li>⭐ Founding streamer status — your room featured first</li>
+        <li>🎨 Early customisation access before anyone else</li>
+        <li>💬 Direct line to shape what gets built</li>
+      </ul>
+      <button class="pixel-btn lp-creator-btn" onclick="openCreatorModal()">✨ Express Interest</button>
     </section>
 
-    <!-- Creator onboarding modal (hidden) -->
+    <!-- Creator interest modal (hidden) -->
     <div id="creator-modal" class="lp-modal-overlay hidden">
       <div class="lp-modal-box">
-        <h2 class="lp-modal-title">CREATE YOUR CORNER</h2>
-        <p class="lp-modal-sub">Enter your early-access invite code:</p>
-        <input type="text" id="creator-code-input" class="lp-modal-input" placeholder="CC-XXXXXX" maxlength="16" autocomplete="off" />
-        <p id="creator-code-error" class="lp-modal-error"></p>
+        <h2 class="lp-modal-title">GET EARLY ACCESS</h2>
+        <p class="lp-modal-sub">We'll send you a personal invite code when the app launches. Limited spots — streamers only for now!</p>
+        <label class="lp-modal-label">Your name</label>
+        <input type="text" id="interest-name" class="lp-modal-input" placeholder="Display name" maxlength="64" autocomplete="off" />
+        <label class="lp-modal-label">Email address <span class="lp-modal-required">*</span></label>
+        <input type="email" id="interest-email" class="lp-modal-input" placeholder="you@example.com" maxlength="128" autocomplete="off" />
+        <label class="lp-modal-label">Twitch handle <span class="lp-modal-optional">(optional)</span></label>
+        <input type="text" id="interest-twitch" class="lp-modal-input" placeholder="@yourchannel" maxlength="64" autocomplete="off" />
+        <label class="lp-modal-label">Who is this space for? <span class="lp-modal-required">*</span></label>
+        <div class="lp-radio-group">
+          <label class="lp-radio-option">
+            <input type="radio" name="spaceFor" value="stream" /> 🎙️ My stream community
+          </label>
+          <label class="lp-radio-option">
+            <input type="radio" name="spaceFor" value="friends" /> 👯 Friends &amp; study buddies
+          </label>
+          <label class="lp-radio-option">
+            <input type="radio" name="spaceFor" value="both" /> ✨ Both!
+          </label>
+        </div>
+        <label class="lp-modal-label">Anything else? <span class="lp-modal-optional">(optional)</span></label>
+        <textarea id="interest-message" class="lp-modal-input lp-modal-textarea" placeholder="Community size, streaming platform, ideas..." maxlength="500"></textarea>
+        <p id="interest-error" class="lp-modal-error"></p>
+        <p id="interest-success" class="lp-modal-success hidden">🎉 You're on the list! We'll be in touch when we launch.</p>
         <div class="lp-modal-actions">
-          <button id="creator-code-submit" class="pixel-btn lp-pixel-btn">Continue →</button>
+          <button id="interest-submit" class="pixel-btn lp-pixel-btn">I'm Interested ✨</button>
           <button class="pixel-btn lp-pixel-btn danger" onclick="closeCreatorModal()">✕ Cancel</button>
         </div>
       </div>
@@ -109,6 +137,6 @@
   </footer>
 
   <script src="/socket.io/socket.io.js"></script>
-  <script src="js/landing.js"></script>
+  <script src="js/landing.js?v=3.15"></script>
 </body>
 </html>

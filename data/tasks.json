@@ -22,5 +22,21 @@
     "playerId": "c-1776101108366-jgoxz5y",
     "completed": false,
     "createdAt": "2026-04-13T17:26:51.687Z"
+  },
+  {
+    "id": "c-1781487770045-jsg5ffg-1781493317477",
+    "text": "Prep for Japan internship",
+    "playerName": "22",
+    "playerId": "c-1781487770045-jsg5ffg",
+    "completed": false,
+    "createdAt": "2026-06-15T03:15:17.480Z"
+  },
+  {
+    "id": "c-1782345292693-n6oaymy-1782345404280",
+    "text": "Chapter 1 Coding 101",
+    "playerName": "d",
+    "playerId": "c-1782345292693-n6oaymy",
+    "completed": true,
+    "createdAt": "2026-06-24T23:56:44.281Z"
   }
 ]

@@ -11,7 +11,8 @@
       "Bash(node --check server.js)",
       "Bash(node --check public/js/GameScene.js)",
       "Bash(node --check public/js/main.js)",
-      "Bash(node --check public/js/landing.js)"
+      "Bash(node --check public/js/landing.js)",
+      "Bash(ls \"C:\\\\Users\\\\derby\\\\Documents\\\\The Game Assets\" 2>/dev/null | head -40)"
     ]
   }
 }

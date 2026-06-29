@@ -8,6 +8,39 @@
  *   BOTTOM ROW (y=344-764): Study (x=32-768) | Kitchen (x=800-1068)
  */
 
+// Default furniture — tilemap interior centre TX=550, TY=400 (map at 358,240; 12×10 tiles; 1-tile walls).
+// TW=108, TH=74. southY=345, northY=455.
+const DEMO_DEFAULT_LAYOUT = [
+  { type: 'desk-six', cx: 550, cy: 400, rotation: 0, imgKey: 'furn_big_table' },
+  { type: 'chair', cx: 508, cy: 345, rotation: 0, imgKey: 'furn_cl_1' },
+  { type: 'chair', cx: 536, cy: 345, rotation: 0, imgKey: 'furn_cl_1' },
+  { type: 'chair', cx: 564, cy: 345, rotation: 0, imgKey: 'furn_cl_1' },
+  { type: 'chair', cx: 592, cy: 345, rotation: 0, imgKey: 'furn_cl_1' },
+  { type: 'chair', cx: 508, cy: 455, rotation: 2, imgKey: 'furn_cl_2' },
+  { type: 'chair', cx: 536, cy: 455, rotation: 2, imgKey: 'furn_cl_2' },
+  { type: 'chair', cx: 564, cy: 455, rotation: 2, imgKey: 'furn_cl_2' },
+  { type: 'chair', cx: 592, cy: 455, rotation: 2, imgKey: 'furn_cl_2' },
+];
+
+// Rotatable chair image sets: index = rotation (0=south, 1=east, 2=north, 3=west)
+const CHAIR_SETS = {
+  'furn_cl': ['furn_cl_1', 'furn_cl_4', 'furn_cl_2', 'furn_cl_3'],
+};
+// Reverse lookup: imgKey → { base, rot }
+const CHAIR_IMG_LOOKUP = {};
+Object.entries(CHAIR_SETS).forEach(([base, imgs]) => {
+  imgs.forEach((img, rot) => { CHAIR_IMG_LOOKUP[img] = { base, rot }; });
+});
+// Rotation index → sit direction
+const CHAIR_SIDES = ['south', 'east', 'north', 'west'];
+// Arrow direction vectors (where player faces when sitting)
+const CHAIR_ARROW_DIRS = [
+  { ax: 0, ay: 1  },  // 0 south  → arrow points down
+  { ax: 1, ay: 0  },  // 1 east   → arrow points right
+  { ax: 0, ay: -1 },  // 2 north  → arrow points up
+  { ax: -1, ay: 0 },  // 3 west   → arrow points left
+];
+
 const DIY_DEFS = {
   // Furniture
   'chair':          { w: 32,  h: 36,  color: 0x8B5E3C, label: 'CHAIR'         },
@@ -34,6 +67,116 @@ class GameScene extends Phaser.Scene {
 
   // ── Phaser lifecycle ──────────────────────────────────────────────────────
 
+  preload() {
+    // Phaser 3.60 loader stall fix: the loader's update() hook only fires during RUNNING
+    // state, not during LOADING (preload) state. When all 32 inflight assets complete
+    // synchronously from browser cache before the first RAF tick, checkLoadQueue never
+    // restarts the remaining files. Re-kick it on each FILE_LOAD event instead.
+    this.load.on(Phaser.Loader.Events.FILE_LOAD, () => {
+      if (this.load.list.size > 0 && this.load.inflight.size < this.load.maxParallelDownloads) {
+        this.load.checkLoadQueue();
+      }
+    });
+
+    // Load all 20 premade character sheets
+    for (let i = 1; i <= 20; i++) {
+      const nn = String(i).padStart(2, '0');
+      this.load.image(`premade_char_${nn}`, `assets/0_Premade_Characters/32x32/Premade_Character_32x32_${nn}.png`);
+    }
+
+    // Furniture single-image assets for DIY placement
+    [
+      ['furn_cl_1',  'assets/furniture/chairs/Classroom_and_Library_Singles_32x32_1.png'],
+      ['furn_cl_2',  'assets/furniture/chairs/Classroom_and_Library_Singles_32x32_2.png'],
+      ['furn_cl_3',  'assets/furniture/chairs/Classroom_and_Library_Singles_32x32_3.png'],
+      ['furn_cl_4',  'assets/furniture/chairs/Classroom_and_Library_Singles_32x32_4.png'],
+      ['furn_bs_16', 'assets/furniture/chairs/Basement_Shadow_Singles_32x32_16.png'],
+      ['furn_bs_17', 'assets/furniture/chairs/Basement_Shadow_Singles_32x32_17.png'],
+      ['furn_bs_18', 'assets/furniture/chairs/Basement_Shadow_Singles_32x32_18.png'],
+      ['furn_bs_39', 'assets/furniture/chairs/Basement_Shadow_Singles_32x32_39.png'],
+      ['furn_bs_40', 'assets/furniture/chairs/Basement_Shadow_Singles_32x32_40.png'],
+      ['furn_bs_41', 'assets/furniture/chairs/Basement_Shadow_Singles_32x32_41.png'],
+      ['furn_bs_42', 'assets/furniture/chairs/Basement_Shadow_Singles_32x32_42.png'],
+      ['furn_bs_43', 'assets/furniture/chairs/Basement_Shadow_Singles_32x32_43.png'],
+      ['furn_bs_44', 'assets/furniture/chairs/Basement_Shadow_Singles_32x32_44.png'],
+      ['furn_generic',   'assets/furniture/tables/1_Generic_Shadowless32x32.png'],
+      ['furn_cl_6',      'assets/furniture/tables/Classroom_and_Library_Singles_32x32_6.png'],
+      ['furn_cl_8',      'assets/furniture/tables/Classroom_and_Library_Singles_32x32_8.png'],
+      ['furn_cl_10',     'assets/furniture/tables/Classroom_and_Library_Singles_32x32_10.png'],
+      ['furn_cl_12',     'assets/furniture/tables/Classroom_and_Library_Singles_32x32_12.png'],
+      ['furn_cl_13',     'assets/furniture/tables/Classroom_and_Library_Singles_32x32_13.png'],
+      ['furn_cl_15',     'assets/furniture/tables/Classroom_and_Library_Singles_32x32_15.png'],
+      ['furn_cl_17',     'assets/furniture/tables/Classroom_and_Library_Singles_32x32_17.png'],
+      ['furn_cl_19',     'assets/furniture/tables/Classroom_and_Library_Singles_32x32_19.png'],
+      ['furn_cl_21',     'assets/furniture/tables/Classroom_and_Library_Singles_32x32_21.png'],
+      ['furn_cl_23',     'assets/furniture/tables/Classroom_and_Library_Singles_32x32_23.png'],
+      ['furn_big_table', 'assets/furniture/tables/big table.png'],
+      ['furn_stool',     'assets/furniture/tables/stool.png'],
+      ['furn_cl_43',   'assets/furniture/decor/Classroom_and_Library_Singles_32x32_43.png'],
+      ['furn_cl_44',   'assets/furniture/decor/Classroom_and_Library_Singles_32x32_44.png'],
+      ['furn_cl_45',   'assets/furniture/decor/Classroom_and_Library_Singles_32x32_45.png'],
+      ['furn_cl_46',   'assets/furniture/decor/Classroom_and_Library_Singles_32x32_46.png'],
+      ['furn_cl_47',   'assets/furniture/decor/Classroom_and_Library_Singles_32x32_47.png'],
+      ['furn_cl_48',   'assets/furniture/decor/Classroom_and_Library_Singles_32x32_48.png'],
+      ['furn_cl_49',   'assets/furniture/decor/Classroom_and_Library_Singles_32x32_49.png'],
+      ['furn_cl_50',   'assets/furniture/decor/Classroom_and_Library_Singles_32x32_50.png'],
+      ['furn_cl_52',   'assets/furniture/decor/Classroom_and_Library_Singles_32x32_52.png'],
+      ['furn_books',   'assets/furniture/decor/Classroom_and_library_Shadowless_32x32_books.png'],
+      ['furn_lr_16',   'assets/furniture/decor/Living_Room_Black_Shadow_Singles_32x32_16.png'],
+      ['furn_lr_17',   'assets/furniture/decor/Living_Room_Black_Shadow_Singles_32x32_17.png'],
+      ['furn_lr_18',   'assets/furniture/decor/Living_Room_Black_Shadow_Singles_32x32_18.png'],
+      ['furn_lr_47',   'assets/furniture/decor/Living_Room_Black_Shadow_Singles_32x32_47.png'],
+      ['furn_lr_87',   'assets/furniture/decor/Living_Room_Black_Shadow_Singles_32x32_87.png'],
+      ['furn_ms_189',  'assets/furniture/decor/Music_and_Sport_Black_Shadow_Singles_32x32_189.png'],
+      ['furn_ms_190',  'assets/furniture/decor/Music_and_Sport_Black_Shadow_Singles_32x32_190.png'],
+      ['furn_ms_191',  'assets/furniture/decor/Music_and_Sport_Black_Shadow_Singles_32x32_191.png'],
+      ['furn_ms_192',  'assets/furniture/decor/Music_and_Sport_Black_Shadow_Singles_32x32_192.png'],
+      ['furn_ms_200',  'assets/furniture/decor/Music_and_Sport_Black_Shadow_Singles_32x32_200.png'],
+      ['furn_ms_201',  'assets/furniture/decor/Music_and_Sport_Black_Shadow_Singles_32x32_201.png'],
+      ['furn_cushion_1', 'assets/furniture/decor/cushion_1.png'],
+      ['furn_cushion_2', 'assets/furniture/decor/cushion_2.png'],
+      ['furn_window',    'assets/furniture/decor/window.png'],
+      ['furn_big_table', 'assets/furniture/tables/big table.png'],
+      ['furn_cl_5',  'assets/furniture/sets/Classroom_and_Library_Singles_32x32_5.png'],
+      ['furn_cl_7',  'assets/furniture/sets/Classroom_and_Library_Singles_32x32_7.png'],
+      ['furn_cl_9',  'assets/furniture/sets/Classroom_and_Library_Singles_32x32_9.png'],
+      ['furn_cl_11', 'assets/furniture/sets/Classroom_and_Library_Singles_32x32_11.png'],
+      ['furn_cl_14', 'assets/furniture/sets/Classroom_and_Library_Singles_32x32_14.png'],
+      ['furn_cl_16', 'assets/furniture/sets/Classroom_and_Library_Singles_32x32_16.png'],
+      ['furn_cl_18', 'assets/furniture/sets/Classroom_and_Library_Singles_32x32_18.png'],
+      ['furn_cl_20', 'assets/furniture/sets/Classroom_and_Library_Singles_32x32_20.png'],
+      ['furn_cl_22', 'assets/furniture/sets/Classroom_and_Library_Singles_32x32_22.png'],
+      ['furn_cl_24', 'assets/furniture/sets/Classroom_and_Library_Singles_32x32_24.png'],
+      ['furn_cl_25', 'assets/furniture/sets/Classroom_and_Library_Singles_32x32_25.png'],
+      ['furn_cl_26', 'assets/furniture/sets/Classroom_and_Library_Singles_32x32_26.png'],
+      ['furn_cl_27', 'assets/furniture/sets/Classroom_and_Library_Singles_32x32_27.png'],
+      ['furn_cl_28', 'assets/furniture/sets/Classroom_and_Library_Singles_32x32_28.png'],
+      ['furn_cl_29', 'assets/furniture/sets/Classroom_and_Library_Singles_32x32_29.png'],
+      ['furn_cl_30', 'assets/furniture/sets/Classroom_and_Library_Singles_32x32_30.png'],
+    ].forEach(([key, path]) => this.load.image(key, path));
+
+    if (window.__ROOM_THEME__ === 'demo') {
+      this.load.tilemapTiledJSON('demo2-map', 'assets/maps/Demo Room 2.tmj');
+      this.load.image('ts-floors',    'assets/tilesets/Room_Builder_Floors_32x32.png');
+      this.load.image('ts-3dwalls',   'assets/tilesets/Room_Builder_3d_walls_32x32.png');
+      this.load.image('ts-classroom', 'assets/tilesets/5_Classroom_and_library_32x32.png');
+      this.load.image('ts-generic',   'assets/tilesets/1_Generic_32x32.png');
+      this.load.image('ts-living',    'assets/tilesets/2_LivingRoom_32x32.png');
+    }
+
+    if (window.__ROOM_THEME__ !== 'cafe') return;
+    this.load.tilemapTiledJSON('cafe-map', 'assets/maps/derrizzmachine.tmj');
+    this.load.image('ts-floors',     'assets/tilesets/Room_Builder_Floors_32x32.png');
+    this.load.image('ts-walls',      'assets/tilesets/Room_Builder_Walls_32x32.png');
+    this.load.image('ts-3dwalls',    'assets/tilesets/Room_Builder_3d_walls_32x32.png');
+    this.load.image('ts-classroom',  'assets/tilesets/5_Classroom_and_library_32x32.png');
+    this.load.image('ts-generic',    'assets/tilesets/1_Generic_32x32.png');
+    this.load.image('ts-music',      'assets/tilesets/6_Music_and_sport_32x32.png');
+    this.load.image('ts-living',     'assets/tilesets/2_LivingRoom_32x32.png');
+    this.load.image('ts-basement',   'assets/tilesets/14_Basement_32x32.png');
+    this.load.image('ts-hospital',   'assets/tilesets/19_Hospital_32x32.png');
+  }
+
   create() {
     // ── State ──────────────────────────────────────────────
     this.isSitting      = false;
@@ -46,6 +189,7 @@ class GameScene extends Phaser.Scene {
     // DIY state
     this.diyMode        = false;
     this.diyType        = null;
+    this.diyImgKey      = null;
     this.diyRotation    = 0;
     this.diyGhost       = null;
     this.diyPlaced      = [];
@@ -59,6 +203,10 @@ class GameScene extends Phaser.Scene {
     this._diySelectedChair = null;
     this._diyColliding    = false;
     this._isDragPlacing   = false;
+    this._diyIsDragging   = false;
+    this._diyDragObj      = null;
+    this._diyDragOffX     = 0;
+    this._diyDragOffY     = 0;
     this.isAtStove         = false;
     this._nearStove        = false;
     this._kitchenStoveZone = null;
@@ -88,12 +236,12 @@ class GameScene extends Phaser.Scene {
     this._posLastSent    = 0;
     this._selfChatBubble = null;
 
-    const gender = window.PlayerClass ? window.PlayerClass.getGender() : 'male';
-    this._gender = gender;
 
     // ── Room (draw order = z depth) ────────────────────────
     if (window.__ROOM_THEME__ === 'cafe') {
       this._buildCafeRoom();
+    } else if (window.__ROOM_THEME__ === 'demo') {
+      this._buildDemoRoom();
     } else {
       this._createFloor();
       this._createRug();
@@ -108,13 +256,16 @@ class GameScene extends Phaser.Scene {
     }
 
     // ── Player ─────────────────────────────────────────────
-    window.PixelSprites.createAllTextures(this);
-    this._setupAnimations(gender);
-    this._createPlayer(gender);
+    this._localCharNum = window.PixelSprites.getOrAssignCharNum();
+    window.PixelSprites.createAllTextures(this, this._localCharNum);
+    this._setupAnimations();
+    this._createPlayer();
 
-    // ── Café static colliders (must run after player exists) ──
-    if (window.__ROOM_THEME__ === 'cafe') {
-      this._addCafeColliders();
+    // ── Café tilemap collision (after player exists) ──
+    if (window.__ROOM_THEME__ === 'cafe' && this._cafeWallLayer) {
+      this.physics.add.collider(this.player, this._cafeWallLayer);
+      this.physics.add.collider(this.player, this._cafeTableLayer1);
+      this.physics.add.collider(this.player, this._cafeTableLayer2);
     }
 
     // ── Input ──────────────────────────────────────────────
@@ -125,7 +276,13 @@ class GameScene extends Phaser.Scene {
     this.input.keyboard.removeCapture(32);
 
     // ── Physics world bounds ──
-    this.physics.world.setBounds(32, 32, 1036, 732);
+    if (window.__ROOM_THEME__ === 'cafe') {
+      this.physics.world.setBounds(0, 0, 960, 640);
+    } else if (window.__ROOM_THEME__ === 'demo') {
+      this.physics.world.setBounds(390, 278, 320, 218); // tilemap interior; bottom=496 stays above empty tile rows
+    } else {
+      this.physics.world.setBounds(32, 32, 1036, 732);
+    }
 
     // ── DIY placement system ────────────────────────────────
     const rKey   = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R, false);
@@ -133,14 +290,24 @@ class GameScene extends Phaser.Scene {
     rKey.on('down',   () => { if (this.diyMode) this._diyRotate(); });
     escKey.on('down', () => { if (this.diyMode) this.exitDIYPlacement(); });
 
-    this.input.on('pointermove', (ptr) => { if (this.diyMode) this._diyMoveGhost(ptr); });
+    this.input.on('pointermove', (ptr) => {
+      if (this.diyMode) this._diyMoveGhost(ptr);
+      else if (this.diyCreatorMode && this._diyIsDragging) this._diyDragUpdate(ptr);
+    });
     this.input.on('pointerdown', (ptr) => {
       if (this.diyMode) {
         if (!this._isDragPlacing) this._diyClick(ptr);
       } else if (this.diyCreatorMode && ptr.button === 0) {
         if (this._checkInlineCtrlClick(ptr.worldX, ptr.worldY)) return;
         const hit = this._diyObjectAtPoint(ptr.worldX, ptr.worldY);
-        if (hit) {
+        if (hit && !hit.isStatic) {
+          this._diySelectObject(hit);
+          this._diyIsDragging = true;
+          this._diyDragObj    = hit;
+          this._diyDragOffX   = ptr.worldX - hit.cx;
+          this._diyDragOffY   = ptr.worldY - hit.cy;
+          this._hideInlineControls();
+        } else if (hit && hit.isStatic) {
           this._diySelectObject(hit);
         } else {
           const chairHit = this._diyChairAtPoint(ptr.worldX, ptr.worldY);
@@ -154,6 +321,8 @@ class GameScene extends Phaser.Scene {
       if (this.diyMode && this._isDragPlacing && ptr.button === 0) {
         this._isDragPlacing = false;
         this._diyClick(ptr, true);
+      } else if (this.diyCreatorMode && this._diyIsDragging && ptr.button === 0) {
+        this._diyEndDrag();
       }
     });
 
@@ -192,6 +361,27 @@ class GameScene extends Phaser.Scene {
       this.player.setPosition(window._pendingSpawn.x, window._pendingSpawn.y);
       window._pendingSpawn = null;
     }
+
+    // ── Zoom controls ─────────────────────────────────────
+    this._zoom = 1.5;
+    this.cameras.main.setZoom(this._zoom);
+
+    // Scroll wheel zoom
+    this.input.on('wheel', (_ptr, _objs, _dx, deltaY) => {
+      this._zoom = Phaser.Math.Clamp(this._zoom - deltaY * 0.001, 0.6, 2.5);
+      this.cameras.main.setZoom(this._zoom);
+    });
+
+    // +/= to zoom in, - to zoom out
+    const plusKey  = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.PLUS,  false);
+    const equalKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.EQUALS,false);
+    const minusKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.MINUS, false);
+    plusKey.on('down',  () => { this._zoom = Phaser.Math.Clamp(this._zoom + 0.15, 0.6, 2.5); this.cameras.main.setZoom(this._zoom); });
+    equalKey.on('down', () => { this._zoom = Phaser.Math.Clamp(this._zoom + 0.15, 0.6, 2.5); this.cameras.main.setZoom(this._zoom); });
+    minusKey.on('down', () => { this._zoom = Phaser.Math.Clamp(this._zoom - 0.15, 0.6, 2.5); this.cameras.main.setZoom(this._zoom); });
+
+    // Camera follows the player
+    this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
   }
 
   update() {
@@ -205,8 +395,15 @@ class GameScene extends Phaser.Scene {
     this._checkLaundryZones();
     this._checkGymZones();
     this._checkBathroomZones();
-    // Dynamic depth sorting (Feature 4)
-    this.player.setDepth(this.player.y);
+    // Dynamic depth sorting — large boost while sitting so no furniture can cover the player
+    // Back-facing chairs: no depth boost so the chair renders in front of the player,
+    // making the backrest visible with the player's back showing behind it (v2.8 behaviour).
+    // Front-facing and side chairs: boost depth so player renders in front of the chair.
+    const sittingBoost = this.isSitting && this.currentChair?.side !== 'north' ? 60 : 0;
+    this.player.setDepth(this.player.y + sittingBoost);
+    if (this._sitBookOverlay?.active) {
+      this._sitBookOverlay.setPosition(this.player.x, this.player.y).setDepth(this.player.y + sittingBoost + 1);
+    }
     // ── Social update ──────────────────────────────────────
     this._checkProximityChat();
     this._broadcastPosition();
@@ -217,35 +414,95 @@ class GameScene extends Phaser.Scene {
     const bob = Math.sin(this.time.now / 300) * 2;
     Object.values(this.otherPlayers).forEach(op => {
       if (op.statusIcon?.visible) {
-        op.statusIcon.setPosition(op.data.x, op.data.y - 54 + bob).setDepth(op.data.y + 30);
+        op.statusIcon.setPosition(op.data.x, op.data.y - 58 + bob).setDepth(op.data.y + 30);
       }
     });
   }
 
   // ── Animations ───────────────────────────────────────────────────────────
 
-  _setupAnimations(gender) {
-    const g = gender;
-    const fps = 6;
+  _setupAnimations() {
+    const fps = 8;
 
-    const dirs = [
-      { key: 'walk_down',  base: `player_${g}_down`  },
-      { key: 'walk_up',    base: `player_${g}_up`    },
-      { key: 'walk_right', base: `player_${g}_right` },
-      { key: 'walk_left',  base: `player_${g}_right` },
-    ];
-
-    dirs.forEach(({ key, base }) => {
+    // Walk left / right — side profile cycle
+    ['walk', 'walk_right', 'walk_left'].forEach(key => {
       if (this.anims.exists(key)) this.anims.remove(key);
       this.anims.create({
         key,
-        frames: [
-          { key: `${base}_0` },
-          { key: `${base}_1` },
-        ],
-        frameRate: fps,
-        repeat: -1,
+        frames: [{ key: 'player_walk_0' }, { key: 'player_walk_1' }, { key: 'player_walk_2' }, { key: 'player_walk_3' }],
+        frameRate: fps, repeat: -1,
       });
+    });
+
+    // Walk down — front-facing 4-frame cycle
+    if (this.anims.exists('walk_down')) this.anims.remove('walk_down');
+    this.anims.create({
+      key: 'walk_down',
+      frames: [
+        { key: 'player_walk_front_0' }, { key: 'player_walk_front_1' },
+        { key: 'player_walk_front_2' }, { key: 'player_walk_front_3' },
+      ],
+      frameRate: fps, repeat: -1,
+    });
+
+    // Walk up — back-facing 4-frame cycle
+    if (this.anims.exists('walk_up')) this.anims.remove('walk_up');
+    this.anims.create({
+      key: 'walk_up',
+      frames: [
+        { key: 'player_walk_back_0' }, { key: 'player_walk_back_1' },
+        { key: 'player_walk_back_2' }, { key: 'player_walk_back_3' },
+      ],
+      frameRate: fps, repeat: -1,
+    });
+
+    // Sit breathe right — 6 right-facing sit frames at y:256 (flip for west)
+    if (this.anims.exists('sit_breathe_right')) this.anims.remove('sit_breathe_right');
+    this.anims.create({
+      key: 'sit_breathe_right',
+      frames: [
+        { key: 'player_sit_side' },   { key: 'player_sit_side_1' },
+        { key: 'player_sit_side_2' }, { key: 'player_sit_side_3' },
+        { key: 'player_sit_side_4' }, { key: 'player_sit_side_5' },
+      ],
+      frameRate: 4,
+      repeat: -1,
+    });
+
+    // Read front — front-facing reading animation (c18-23 y:448)
+    if (this.anims.exists('read_front')) this.anims.remove('read_front');
+    this.anims.create({
+      key: 'read_front',
+      frames: [
+        { key: 'player_read_front_0' }, { key: 'player_read_front_1' },
+        { key: 'player_read_front_2' }, { key: 'player_read_front_3' },
+        { key: 'player_read_front_4' }, { key: 'player_read_front_5' },
+      ],
+      frameRate: 4,
+      repeat: -1,
+    });
+
+    // Reading books loop (6 frames)
+    if (this.anims.exists('read')) this.anims.remove('read');
+    this.anims.create({
+      key: 'read',
+      frames: [
+        { key: 'player_read_0' }, { key: 'player_read_1' }, { key: 'player_read_2' },
+        { key: 'player_read_3' }, { key: 'player_read_4' }, { key: 'player_read_5' },
+      ],
+      frameRate: 4, repeat: -1,
+    });
+
+    // Back-facing reading animation for north chairs (c6-11, y:448)
+    if (this.anims.exists('read_back_anim')) this.anims.remove('read_back_anim');
+    this.anims.create({
+      key: 'read_back_anim',
+      frames: [
+        { key: 'player_read_back_0' }, { key: 'player_read_back_1' },
+        { key: 'player_read_back_2' }, { key: 'player_read_back_3' },
+        { key: 'player_read_back_4' }, { key: 'player_read_back_5' },
+      ],
+      frameRate: 4, repeat: -1,
     });
   }
 
@@ -257,14 +514,105 @@ class GameScene extends Phaser.Scene {
   // ═══════════════════════════════════════════════════════════════════════════
 
   _buildCafeRoom() {
-    this._buildCafeFloor();
-    this._buildCafeBackWall();
-    this._buildCafeOuterWalls();
-    this._buildCafeWindows();
-    this._buildCafeCounter();
-    this._buildCafeChalkboard();
-    this._buildCafeTables();
-    this._buildCafeDecor();
+    const map = this.make.tilemap({ key: 'cafe-map' });
+
+    const tsFloors    = map.addTilesetImage('Room_Builder_Floors_32x32',        'ts-floors');
+    const tsWalls     = map.addTilesetImage('Room_Builder_Walls_32x32',          'ts-walls');
+    const ts3d        = map.addTilesetImage('Room_Builder_3d_walls_32x32',       'ts-3dwalls');
+    const tsClass     = map.addTilesetImage('5_Classroom_and_library_32x32',     'ts-classroom');
+    const ts3d2       = map.addTilesetImage('Room_Builder_3d_walls_32x32_2',     'ts-3dwalls');
+    const tsGeneric   = map.addTilesetImage('1_Generic_32x32',                   'ts-generic');
+    const tsMusic     = map.addTilesetImage('6_Music_and_sport_32x32',           'ts-music');
+    const tsLiving    = map.addTilesetImage('2_LivingRoom_32x32',                'ts-living');
+    const tsBasement  = map.addTilesetImage('14_Basement_32x32_black',           'ts-basement');
+    const tsHospital  = map.addTilesetImage('19_Hospital_32x32',                 'ts-hospital');
+
+    const all = [tsFloors, tsWalls, ts3d, tsClass, ts3d2, tsGeneric, tsMusic, tsLiving, tsBasement, tsHospital];
+
+    map.createLayer('Floor Tilemap',      all, 0, 0).setDepth(0);
+    map.createLayer('Carpet Tilemap',     all, 0, 0).setDepth(1);
+    const wallLayer   = map.createLayer('Walls Tilemap',    all, 0, 0).setDepth(2);
+    map.createLayer('Chairs map',         all, 0, 0).setDepth(3);
+    const tableLayer1 = map.createLayer('Tables map Top 1', all, 0, 0).setDepth(4);
+    const tableLayer2 = map.createLayer('Tables map 2',     all, 0, 0).setDepth(4);
+    map.createLayer('Decor map',          all, 0, 0).setDepth(5);
+
+    wallLayer.setCollisionByExclusion([-1, 0]);
+    tableLayer1.setCollisionByExclusion([-1, 0]);
+    tableLayer2.setCollisionByExclusion([-1, 0]);
+
+    this._cafeWallLayer   = wallLayer;
+    this._cafeTableLayer1 = tableLayer1;
+    this._cafeTableLayer2 = tableLayer2;
+
+    this._buildTilemapChairs(map);
+  }
+
+  _buildTilemapChairs(map) {
+    const chairData  = map.getLayer('Chairs map').data;
+    const table1Data = map.getLayer('Tables map Top 1').data;
+    const table2Data = map.getLayer('Tables map 2').data;
+    const ROWS = map.height, COLS = map.width;
+
+    // Tileset GID ranges for special chair types
+    const MUSIC_MIN  = 6505, MUSIC_MAX  = 7272;
+    const LIVING_MIN = 7273, LIVING_MAX = 7992;
+
+    const hasTable = (r, c) =>
+      r >= 0 && r < ROWS && c >= 0 && c < COLS &&
+      (table1Data[r][c].index > 0 || table2Data[r][c].index > 0);
+
+    const visited = Array.from({ length: ROWS }, () => new Array(COLS).fill(false));
+    let id = 0;
+
+    for (let c = 0; c < COLS; c++) {
+      for (let r = 0; r < ROWS; r++) {
+        if (visited[r][c] || chairData[r][c].index <= 0) continue;
+
+        visited[r][c] = true;
+        let endR = r;
+        while (endR + 1 < ROWS) {
+          const nextIdx = chairData[endR + 1][c].index;
+          if (nextIdx <= 0 || Math.abs(nextIdx - chairData[endR][c].index) > 50) break;
+          endR++;
+          visited[endR][c] = true;
+        }
+
+        const tileIdx = chairData[r][c].index;
+        let chairType;
+        if (tileIdx >= MUSIC_MIN  && tileIdx <= MUSIC_MAX)  chairType = 'piano';
+        if (tileIdx >= LIVING_MIN && tileIdx <= LIVING_MAX) chairType = 'sofa';
+
+        let tableNorth = false, tableSouth = false;
+        for (let cr = r - 2; cr <= r; cr++)       if (hasTable(cr, c)) { tableNorth = true; break; }
+        for (let cr = endR; cr <= endR + 2; cr++) if (hasTable(cr, c)) { tableSouth = true; break; }
+
+        // If a table tile exists WITHIN the chair run (overlapping art), seat at the cluster top
+        let overlapWithTable = false;
+        for (let cr = r + 1; cr <= endR; cr++) if (hasTable(cr, c)) { overlapWithTable = true; break; }
+
+        let side, seatY;
+        if (tableNorth && !tableSouth) {
+          side  = 'south';
+          seatY = r * 32 + 12;
+        } else {
+          side  = 'north';
+          seatY = overlapWithTable ? r * 32 + 12 : endR * 32 + 20;
+        }
+
+        const entry = { id: `tmx-c-${id++}`, seatX: c * 32 + 16, seatY, side, occupied: false };
+        if (chairType) entry.type = chairType;
+        this.chairs.push(entry);
+      }
+    }
+
+    // Hardcoded east/west seats for the 3 right-side tables (cols 12-15)
+    // These tables have no chair tiles in the Chairs layer so we inject them here.
+    [[6, 8], [10, 12], [14, 16]].forEach(([startR, endR]) => {
+      const seatY = Math.round((startR + endR) / 2) * 32 + 16;
+      this.chairs.push({ id: `tmx-c-${id++}`, seatX: 11 * 32 + 16, seatY, side: 'east', occupied: false });
+      this.chairs.push({ id: `tmx-c-${id++}`, seatX: 16 * 32 + 16, seatY, side: 'west', occupied: false });
+    });
   }
 
   _buildCafeFloor() {
@@ -815,11 +1163,61 @@ class GameScene extends Phaser.Scene {
     g.setDepth(3);
   }
 
+  _buildDemoRoom() {
+    const MX = 358, MY = 240; // tilemap top-left (384×320 map centred in 1100×800 canvas)
+
+    // Clear any stale demo furniture positions from a previous layout version
+    try { localStorage.removeItem('studyspace_diy_demo'); } catch(_) {}
+
+    // Dark outer surround so the canvas outside the tilemap doesn't look bare
+    const bg = this.add.graphics();
+    bg.fillStyle(0x1a1008).fillRect(0, 0, 1100, 800);
+    bg.setDepth(-30);
+
+    // Tilemap — entire block guarded so a failure never crashes create()
+    let tilemapOk = false;
+    try {
+      const map     = this.make.tilemap({ key: 'demo2-map' });
+      const tsF     = map.addTilesetImage('Room_Builder_Floors_32x32',     'ts-floors');
+      const tsC     = map.addTilesetImage('5_Classroom_and_library_32x32', 'ts-classroom');
+      const tsLv    = map.addTilesetImage('2_LivingRoom_32x32',            'ts-living');
+      const tsG     = map.addTilesetImage('1_Generic_32x32',               'ts-generic');
+      const ts3     = map.addTilesetImage('Room_Builder_3d_walls_32x32',   'ts-3dwalls');
+      const ts32    = map.addTilesetImage('Room_Builder_3d_walls_32x32_2', 'ts-3dwalls');
+      const all     = [tsF, tsC, tsLv, tsG, ts3, ts32].filter(Boolean);
+      if (all.length > 0) {
+        const fl = map.createLayer('Floor',  all, MX, MY); if (fl) { fl.setDepth(-10); tilemapOk = true; }
+        const cl = map.createLayer('Carpet', all, MX, MY); if (cl) cl.setDepth(-9);
+        // Wall depth = MY+64 so player (y≥272) is in front of side walls but behind top wall header when pressed against north wall
+        const wl = map.createLayer('Wall',   all, MX, MY); if (wl) wl.setDepth(MY + 64);
+        // Decor (bookshelves/plants at top 3 rows) depth = MY+96 — player in front when south of row 2
+        const dl = map.createLayer('Decor',  all, MX, MY); if (dl) dl.setDepth(MY + 96);
+      }
+    } catch(e) { console.warn('Demo tilemap failed:', e?.message); }
+
+    if (!tilemapOk) {
+      // Tilemap failed — draw a plain hand-drawn room so the scene never crashes
+      const g = this.add.graphics();
+      g.fillStyle(0xC8A87A).fillRect(MX, MY, 384, 320);
+      g.lineStyle(1, 0xB89868, 0.35);
+      for (let y = MY; y < MY + 320; y += 24) g.lineBetween(MX, y, MX + 384, y);
+      g.fillStyle(0x6E5E9A, 0.45).fillRect(MX + 40, MY + 40, 304, 240);
+      g.fillStyle(0x9B8268).fillRect(MX, MY - 32, 384, 32);
+      g.fillStyle(0x6B5442).fillRect(MX, MY, 384, 6);
+      g.fillStyle(0x7A6048).fillRect(MX, MY + 320, 384, 24);
+      g.fillStyle(0x6B5442).fillRect(MX - 1, MY, 5, 320);
+      g.fillStyle(0x6B5442).fillRect(MX + 379, MY, 5, 320);
+      g.setDepth(-10);
+    }
+    // Furniture is loaded via the DIY layout system (_loadDIYLayout → _diyCreateItem)
+  }
+
   // ── Player ────────────────────────────────────────────────────────────────
 
-  _createPlayer(gender) {
-    const startTex = `player_${gender}_down_0`;
-    this.player = this.physics.add.sprite(400, 560, startTex);
+  _createPlayer() {
+    const spawnX = window.__ROOM_THEME__ === 'demo' ? 440 : 400;
+    const spawnY = window.__ROOM_THEME__ === 'demo' ? 480 : 560;
+    this.player = this.physics.add.sprite(spawnX, spawnY, 'player_idle');
     this.player.setCollideWorldBounds(true);
     // NOTE: depth is set dynamically in update() — Feature 4
     this.player.setOrigin(0.5, 1);
@@ -842,7 +1240,7 @@ class GameScene extends Phaser.Scene {
       strokeThickness: 3,
       backgroundColor: '#2a1040cc',
       padding: { x: 4, y: 2 },
-    }).setOrigin(0.5, 1).setVisible(true); // own name always visible
+    }).setOrigin(0.5, 1).setVisible(false); // name tag hidden
 
     // Permanent faint glow to show which avatar is YOU
     this._selfGlow = this.add.graphics();
@@ -858,13 +1256,25 @@ class GameScene extends Phaser.Scene {
       new Phaser.Geom.Rectangle(-18, -48, 36, 48),
       Phaser.Geom.Rectangle.Contains
     );
-    this.player.on('pointerover',  () => { this.hoverHighlight.setVisible(true);  });
-    this.player.on('pointerout',   () => { this.hoverHighlight.setVisible(false); });
+    this.player.on('pointerover',  () => { this.hoverHighlight.setVisible(true);  this.nameTag.setVisible(true);  });
+    this.player.on('pointerout',   () => { this.hoverHighlight.setVisible(false); this.nameTag.setVisible(false); });
 
-    this.statusIcon = this.add.image(0, 0, 'icon_book')
-      .setVisible(false).setOrigin(0.5, 1);
+    this.statusIcon = this.add.sprite(0, 0, 'player_read_front_0')
+      .setVisible(false).setOrigin(0.5, 1).setScale(0.55);
     this._iconYOffset = 0;
     this._iconTween   = null;
+
+    if (this.anims.exists('book_flip')) this.anims.remove('book_flip');
+    this.anims.create({
+      key: 'book_flip',
+      frames: [
+        { key: 'player_read_front_0' }, { key: 'player_read_front_1' },
+        { key: 'player_read_front_2' }, { key: 'player_read_front_3' },
+        { key: 'player_read_front_4' }, { key: 'player_read_front_5' },
+      ],
+      frameRate: 4,
+      repeat: -1,
+    });
   }
 
   // ── Movement ──────────────────────────────────────────────────────────────
@@ -924,8 +1334,11 @@ class GameScene extends Phaser.Scene {
     } else {
       this.player.anims.stop();
       const flipX = (this.lastDir === 'left');
-      const dirKey = (this.lastDir === 'left') ? 'right' : this.lastDir;
-      this.player.setTexture(`player_${this._gender}_${dirKey}_0`);
+      const idleTex =
+        this.lastDir === 'up'   ? 'player_up_0'        :
+        this.lastDir === 'down' ? 'player_walk_front_0' :
+        'player_idle';
+      this.player.setTexture(idleTex);
       this.player.setFlipX(flipX);
     }
   }
@@ -933,7 +1346,7 @@ class GameScene extends Phaser.Scene {
   _updateNameTag() {
     const px = this.player.x;
     const py = this.player.y;
-    this.nameTag.setPosition(px, py - 52);
+    this.nameTag.setPosition(px, py - 72);
     this.nameTag.setDepth(this.player.y + 35);
     this._selfGlow.setPosition(px, py).setDepth(this.player.y - 1);
     this.hoverHighlight.setPosition(px, py);
@@ -943,7 +1356,7 @@ class GameScene extends Phaser.Scene {
   _updateStatusIcon() {
     if (!this.statusIcon || !this.statusIcon.visible) return;
     const bob = Math.sin(this.time.now / 300) * 2;
-    this.statusIcon.setPosition(this.player.x, this.player.y - 54 + bob);
+    this.statusIcon.setPosition(this.player.x, this.player.y - 58 + bob);
     this.statusIcon.setDepth(this.player.y + 30);
   }
 
@@ -958,7 +1371,7 @@ class GameScene extends Phaser.Scene {
     if (type === 'laundry')      return 'icon_laundry';
     if (type === 'coffee')       return 'icon_coffee';
     if (type === 'workout')      return 'icon_fire';
-    return 'icon_book';
+    return 'icon_pause';
   }
 
   // Show/hide status icon above own player's head; broadcasts change to others
@@ -967,9 +1380,11 @@ class GameScene extends Phaser.Scene {
     if (this._iconTween) { this._iconTween.stop(); this._iconTween = null; }
     this._iconYOffset = 0;
 
-    if (!type) {
+    if (!type || type === 'focus') {
+      this.statusIcon.anims.stop();
       this.statusIcon.setVisible(false);
     } else {
+      this.statusIcon.anims.stop();
       this.statusIcon.setTexture(GameScene._iconTexKey(type)).setVisible(true);
     }
 
@@ -1048,6 +1463,10 @@ class GameScene extends Phaser.Scene {
       sitEl.textContent = '[E] Sit & Eat';
     } else if (wantSit && this.nearestChair?.type === 'beanbag') {
       sitEl.textContent = '[E] Chill Out';
+    } else if (wantSit && this.nearestChair?.type === 'sofa') {
+      sitEl.textContent = '[E] Lounge';
+    } else if (wantSit && this.nearestChair?.type === 'piano') {
+      sitEl.textContent = '[E] Play Piano';
     } else if (wantSit) {
       sitEl.textContent = '[E] Sit Down';
     }
@@ -1142,7 +1561,7 @@ class GameScene extends Phaser.Scene {
     this.player.body.moves  = true;
     this.player.body.enable = true;
     this.player.body.reset(this.player.x, this.player.y + 30);
-    this.player.setTexture(`player_${this._gender}_down_0`);
+    this.player.setTexture('player_idle');
     this.player.setFlipX(false);
     this._updatePrompts();
     // Close any sitting modal that may have opened before rejection arrived
@@ -1184,42 +1603,83 @@ class GameScene extends Phaser.Scene {
 
     this.tweens.add({
       targets:  this.player,
-      x:        chair.seatX,
-      y:        chair.seatY,
+      x:        chair.seatX + (chair.side === 'east' ? 6 : (chair.side === 'west' ? -6 : 0)),
+      y:        chair.seatY + (chair.side === 'south' ? 14 : (chair.side === 'north' ? 0 : 2)),
       duration: 220,
       ease:     'Power2',
       onComplete: () => {
         this.player.body.moves = false;
         this.player.body.setVelocity(0, 0);
 
-        const sitTex = chair.side === 'north'
-          ? `player_${this._gender}_sit`
-          : `player_${this._gender}_up_0`;
-        this.player.setTexture(sitTex);
-        this.player.setFlipX(false);
+        // Sit pose: directional texture based on chair.side
+        // DIY chairs (no type) use the full sit pose so the sprite row is always populated
+        const openChair = !chair.type || chair.type === 'sofa' || chair.type === 'beanbag' || chair.type === 'dining' || chair.type === 'piano';
+        const base = openChair ? 'player_sit' : 'player_sit_desk';
+        // North: static back-still + gentle bob tween.
+        // South: front-facing reading animation.
+        // East/West: sit-breathe right-facing loop (flip for west).
+        if (chair.side === 'north') {
+          // Back of chair faces viewer → back of player bobbing gently
+          this.player.anims.stop();
+          this.player.setTexture('player_up_0');
+          this.player.setFlipX(false);
+          if (this._sitBobTween) this._sitBobTween.stop();
+          this._sitBobTween = this.tweens.add({
+            targets: this.player,
+            y: this.player.y - 2,
+            duration: 700,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut',
+          });
+        } else if (chair.side === 'south') {
+          // Player faces south (visible to viewer) — front-facing body + animated book overlay
+          this.player.anims.stop();
+          this.player.setTexture('player_walk_front_0');
+          this.player.setFlipX(false);
+          if (this._sitBobTween) this._sitBobTween.stop();
+          this._sitBobTween = this.tweens.add({
+            targets: this.player,
+            y: this.player.y - 2,
+            duration: 700,
+            yoyo: true,
+            repeat: -1,
+            ease: 'Sine.easeInOut',
+          });
+          // Book-flip overlay: plays read_front animation on top of the front-facing body
+          if (this._sitBookOverlay) { this._sitBookOverlay.destroy(); this._sitBookOverlay = null; }
+          this._sitBookOverlay = this.add.sprite(this.player.x, this.player.y, 'player_read_front_0')
+            .setOrigin(0.5, 0.5)
+            .setDepth(this.player.depth + 1);
+          this._sitBookOverlay.play('read_front', true);
+        } else {
+          this.player.play('sit_breathe_right', true);
+          this.player.setFlipX(chair.side === 'west');
+        }
 
         this._updatePrompts();
 
+        const si = document.getElementById('status-indicator');
         if (chair.type === 'dining') {
           this.setStatusIcon('eating');
-          const si = document.getElementById('status-indicator');
           if (si) { si.textContent = '● EATING'; si.className = 'status-idle'; }
           const eatModal = document.getElementById('eat-modal');
           if (eatModal) { eatModal.classList.remove('hidden'); eatModal.classList.add('active'); }
-        } else if (chair.type === 'beanbag') {
+        } else if (chair.type === 'beanbag' || chair.type === 'sofa') {
           this.setStatusIcon('relax');
-          const si = document.getElementById('status-indicator');
           if (si) { si.textContent = '● RELAXING'; si.className = 'status-idle'; }
           const relaxModal = document.getElementById('relax-modal');
           if (relaxModal) { relaxModal.classList.remove('hidden'); relaxModal.classList.add('active'); }
+        } else if (chair.type === 'piano') {
+          this.setStatusIcon('relax');
+          if (si) { si.textContent = '● PLAYING MUSIC'; si.className = 'status-idle'; }
+          const relaxModal = document.getElementById('relax-modal');
+          if (relaxModal) { relaxModal.classList.remove('hidden'); relaxModal.classList.add('active'); }
         } else {
-          const si = document.getElementById('status-indicator');
+          this.setStatusIcon(null);
           if (si) { si.textContent = '● AT DESK'; si.className = 'status-idle'; }
           const pModal = document.getElementById('pomodoro-modal');
-          if (pModal) {
-            pModal.classList.remove('hidden');
-            pModal.classList.add('active');
-          }
+          if (pModal) { pModal.classList.remove('hidden'); pModal.classList.add('active'); }
         }
       },
     });
@@ -1228,7 +1688,8 @@ class GameScene extends Phaser.Scene {
   standUp() {
     if (!this.isSitting) return;
 
-    if (this.currentChair?.type === 'dining' || this.currentChair?.type === 'beanbag') {
+    const relaxTypes = ['dining', 'beanbag', 'sofa', 'piano'];
+    if (relaxTypes.includes(this.currentChair?.type)) {
       this._doStandUp();
       return;
     }
@@ -1246,19 +1707,19 @@ class GameScene extends Phaser.Scene {
   _doStandUp() {
     if (!this.isSitting) return;
 
+    if (this._sitBobTween) { this._sitBobTween.stop(); this._sitBobTween = null; }
+    if (this._sitBookOverlay) { this._sitBookOverlay.destroy(); this._sitBookOverlay = null; }
     SoundManager.play('standup');
     if (window.ActivityTimer?.isRunning()) window.ActivityTimer.stop();
 
-    const pModal = document.getElementById('pomodoro-modal');
-    if (pModal) {
-      pModal.classList.add('hidden');
-      pModal.classList.remove('active');
-    }
+    ['pomodoro-modal', 'eat-modal', 'relax-modal'].forEach(id => {
+      const m = document.getElementById(id);
+      if (m) { m.classList.add('hidden'); m.classList.remove('active'); }
+    });
 
     if (window.PomodoroManager) window.PomodoroManager.stop();
 
     const side = this.currentChair ? this.currentChair.side : 'south';
-    const offset = side === 'north' ? -60 : 60;
 
     if (this.currentChair) {
       window.socket?.emit('standUp', { chairId: this.currentChair.id });
@@ -1267,16 +1728,26 @@ class GameScene extends Phaser.Scene {
     this.isSitting    = false;
     this.currentChair = null;
 
-    const newX = this.player.x;
-    const newY = this.player.y + offset;
+    let newX = this.player.x;
+    let newY = this.player.y;
+    // Step backward from the direction the player was facing
+    if      (side === 'north') newY += 48;
+    else if (side === 'south') newY -= 48;
+    else if (side === 'east')  newX -= 48;
+    else                       newX += 48;
+
     this.player.body.moves  = true;
     this.player.body.enable = true;
     this.player.body.reset(newX, newY);
 
-    const dirKey = side === 'north' ? 'up' : 'down';
-    this.lastDir  = dirKey;
-    this.player.setTexture(`player_${this._gender}_${dirKey}_0`);
-    this.player.setFlipX(false);
+    let dirKey, flipX = false;
+    if      (side === 'north') { dirKey = 'up';    }
+    else if (side === 'south') { dirKey = 'down';  }
+    else if (side === 'east')  { dirKey = 'right'; }
+    else                       { dirKey = 'right'; flipX = true; }
+    this.lastDir = flipX ? 'left' : dirKey;
+    this.player.setTexture('player_idle');
+    this.player.setFlipX(flipX);
 
     this.setStatusIcon(null);
 
@@ -1290,11 +1761,12 @@ class GameScene extends Phaser.Scene {
 
   // ── DIY Placement system ──────────────────────────────────────────────────
 
-  enterDIYPlacement(type) {
+  enterDIYPlacement(type, imgKey = null) {
     this._diyDeselect();
     if (this.diyMode) this.exitDIYPlacement();
     this.diyMode          = true;
     this.diyType          = type;
+    this.diyImgKey        = imgKey;
     this.diyRotation      = 0;
     this._diyGhostContent = [];
 
@@ -1309,12 +1781,13 @@ class GameScene extends Phaser.Scene {
 
     this._diyShowControls('place');
     const lbl = document.getElementById('diy-placing-label');
-    if (lbl) lbl.textContent = `Placing: ${DIY_DEFS[type]?.label || type}`;
+    if (lbl) lbl.textContent = imgKey ? 'Placing item…' : `Placing: ${DIY_DEFS[type]?.label || type}`;
   }
 
   exitDIYPlacement() {
-    this.diyMode = false;
-    this.diyType = null;
+    this.diyMode   = false;
+    this.diyType   = null;
+    this.diyImgKey = null;
     if (this.diyGhost) { this.diyGhost.destroy(true); this.diyGhost = null; }
     this._diyGhostContent = [];
     document.querySelectorAll('.diy-item-btn').forEach(b => b.classList.remove('active'));
@@ -1323,6 +1796,11 @@ class GameScene extends Phaser.Scene {
 
   _diyRotate() {
     this.diyRotation = (this.diyRotation + 1) % 4;
+    // Directional chair: swap to the correct sprite for the new rotation
+    if (this.diyType === 'chair' && CHAIR_IMG_LOOKUP[this.diyImgKey]) {
+      const { base } = CHAIR_IMG_LOOKUP[this.diyImgKey];
+      this.diyImgKey = CHAIR_SETS[base][this.diyRotation];
+    }
     this._diyRefreshGhost();
   }
 
@@ -1355,7 +1833,22 @@ class GameScene extends Phaser.Scene {
       case 'coffee-machine': fi = new Furniture.CoffeeMachine(this, 0, 0);    break;
     }
 
-    if (fi) {
+    const isDirectionalChair = this.diyType === 'chair' && !!CHAIR_IMG_LOOKUP[this.diyImgKey];
+
+    if (this.diyImgKey && this.textures.exists(this.diyImgKey)) {
+      // Image-based ghost: show the actual PNG sprite
+      if (fi) {
+        if (fi.collider) fi.collider.destroy();
+        const gfxList = Array.isArray(fi.graphics) ? fi.graphics : [fi.graphics];
+        gfxList.forEach(g => { if (g && g.active) g.destroy(); });
+      }
+      // Directional chairs must NOT be Phaser-rotated — the sprite is already the right direction
+      const img = this.add.image(0, 0, this.diyImgKey)
+        .setAlpha(0.7)
+        .setAngle(isDirectionalChair ? 0 : 0); // angle handled by container below
+      this.diyGhost.add(img);
+      this._diyGhostContent.push(img);
+    } else if (fi) {
       if (fi.collider) { fi.collider.destroy(); fi.collider = null; }
       const gfxList = Array.isArray(fi.graphics) ? fi.graphics : [fi.graphics];
       gfxList.forEach(g => {
@@ -1379,38 +1872,36 @@ class GameScene extends Phaser.Scene {
       this._diyGhostContent.push(r);
     }
 
-    const chairLayouts = {
-      'desk-solo':     [{ side: 'south', lx: 0,           ly:  def.h / 2 + 30 }],
-      'desk-two':      [{ side: 'north', lx: 0,           ly: -(def.h / 2 + 30) },
-                        { side: 'south', lx: 0,           ly:  def.h / 2 + 30 }],
-      'desk-four':     [{ side: 'north', lx: -def.w / 4,  ly: -(def.h / 2 + 32) },
-                        { side: 'north', lx:  def.w / 4,  ly: -(def.h / 2 + 32) },
-                        { side: 'south', lx: -def.w / 4,  ly:  def.h / 2 + 32 },
-                        { side: 'south', lx:  def.w / 4,  ly:  def.h / 2 + 32 }],
-      'desk-six':      [...[-64, 0, 64].map(lx => ({ side: 'north', lx, ly: -(def.h / 2 + 24) })),
-                        ...[-64, 0, 64].map(lx => ({ side: 'south', lx, ly:  def.h / 2 + 24 }))],
-      'kitchen-table': [{ side: 'north', lx: -32, ly: -(def.h / 2 + 30) },
-                        { side: 'north', lx:  32, ly: -(def.h / 2 + 30) },
-                        { side: 'south', lx: -32, ly:  def.h / 2 + 30 },
-                        { side: 'south', lx:  32, ly:  def.h / 2 + 30 }],
-    };
-    (chairLayouts[this.diyType] || []).forEach(({ side, lx, ly }) => {
-      const ch = new Furniture.Chair(this, 0, 0, side);
-      if (ch.collider) { ch.collider.destroy(); ch.collider = null; }
-      ch.graphics.x = lx - 16;
-      ch.graphics.y = ly - 18;
-      ch.graphics.alpha = 0.45;
-      this.diyGhost.add(ch.graphics);
-      this._diyGhostContent.push(ch.graphics);
-    });
+    // Faint green arrow showing where the player will face when sitting (all chairs)
+    if (this.diyType === 'chair') {
+      const { ax, ay } = CHAIR_ARROW_DIRS[rot];
+      const shaft = 16, head = 9, hw = 5;
+      const arrowG = this.add.graphics();
+      arrowG.lineStyle(2, 0x00ff88, 0.75);
+      arrowG.fillStyle(0x00ff88, 0.75);
+      arrowG.lineBetween(0, 0, ax * shaft, ay * shaft);
+      // Arrowhead triangle
+      const bx = ax * shaft, by = ay * shaft;
+      const tx = ax * (shaft + head), ty = ay * (shaft + head);
+      const px = -ay * hw, py = ax * hw;
+      arrowG.fillTriangle(bx + px, by + py, bx - px, by - py, tx, ty);
+      this.diyGhost.add(arrowG);
+      this._diyGhostContent.push(arrowG);
+    }
 
     this._diyGhostOverlay = this.add.graphics();
     this.diyGhost.add(this._diyGhostOverlay);
+    this._diyGhostContent.push(this._diyGhostOverlay);
 
-    this.diyGhost.setAngle(rot * 90);
+    // Chairs: image never rotates — only the arrow indicates direction
+    this.diyGhost.setAngle((this.diyType === 'chair') ? 0 : rot * 90);
 
+    const dirLabels = ['↓ Front', '→ Right', '↑ Back', '← Left'];
     const angles = ['0°', '90°', '180°', '270°'];
-    if (this.diyGhostT) this.diyGhostT.setText(`${def.label}  ${angles[rot]}`);
+    const ghostLabel = (this.diyType === 'chair')
+      ? dirLabels[rot]
+      : (this.diyImgKey ? angles[rot] : `${def.label}  ${angles[rot]}`);
+    if (this.diyGhostT) this.diyGhostT.setText(ghostLabel);
   }
 
   _diyMoveGhost(ptr) {
@@ -1418,24 +1909,38 @@ class GameScene extends Phaser.Scene {
     const x = Math.round(ptr.worldX / 16) * 16;
     const y = Math.round(ptr.worldY / 16) * 16;
     this.diyGhost.setPosition(x, y);
-    // Updated room coordinates (Feature 2)
-    const inStudy   = x >= 64  && x <= 736  && y >= 360 && y <= 748;
-    const inKitchen = x >= 832 && x <= 1052 && y >= 360 && y <= 748;
-    const inLaundry = x >= 744 && x <= 1052 && y >= 48  && y <= 296;
-    const inGym     = x >= 64  && x <= 444  && y >= 48  && y <= 296;
-    const inBath    = x >= 508 && x <= 668  && y >= 48  && y <= 296;
-    const inRoom    = inStudy || inKitchen || inLaundry || inGym || inBath;
+
+    let inRoom;
+    if (window.__ROOM_THEME__ === 'cafe') {
+      inRoom = (x >= 64 && x <= 1036 && y >= 240 && y <= 748) ||
+               (x >= 64 && x <= 668  && y >= 130 && y <  240);
+    } else if (window.__ROOM_THEME__ === 'demo') {
+      inRoom = x >= 305 && x <= 795 && y >= 185 && y <= 555;
+    } else {
+      const inStudy   = x >= 64  && x <= 736  && y >= 360 && y <= 748;
+      const inKitchen = x >= 832 && x <= 1052 && y >= 360 && y <= 748;
+      const inLaundry = x >= 744 && x <= 1052 && y >= 48  && y <= 296;
+      const inGym     = x >= 64  && x <= 444  && y >= 48  && y <= 296;
+      const inBath    = x >= 508 && x <= 668  && y >= 48  && y <= 296;
+      inRoom = inStudy || inKitchen || inLaundry || inGym || inBath;
+    }
+
     this._diyColliding = inRoom && this._diyCheckCollision(x, y);
     this.diyGhost.alpha = inRoom ? 1 : 0.3;
 
-    if (this._diyGhostOverlay) {
+    if (this._diyGhostOverlay && this._diyGhostOverlay.active) {
       const def = DIY_DEFS[this.diyType];
       this._diyGhostOverlay.clear();
       if (def) {
-        const col  = (!inRoom || this._diyColliding) ? 0xff3333 : 0x00ff88;
-        const alf  = (!inRoom || this._diyColliding) ? 0.9 : 0.5;
+        let ow = def.w, oh = def.h;
+        if (this.diyImgKey && this.textures.exists(this.diyImgKey)) {
+          const frame = this.textures.getFrame(this.diyImgKey);
+          if (frame) { ow = frame.realWidth; oh = frame.realHeight; }
+        }
+        const col = (!inRoom || this._diyColliding) ? 0xff3333 : 0x00ff88;
+        const alf = (!inRoom || this._diyColliding) ? 0.9 : 0.5;
         this._diyGhostOverlay.lineStyle(2, col, alf);
-        this._diyGhostOverlay.strokeRect(-def.w / 2, -def.h / 2, def.w, def.h);
+        this._diyGhostOverlay.strokeRect(-ow / 2, -oh / 2, ow, oh);
       }
     }
   }
@@ -1449,6 +1954,8 @@ class GameScene extends Phaser.Scene {
       // Café: full open floor, excluding the counter/back-wall area
       inBounds = (x >= 64 && x <= 1036 && y >= 240 && y <= 748) ||
                  (x >= 64 && x <= 668  && y >= 130 && y < 240);
+    } else if (window.__ROOM_THEME__ === 'demo') {
+      inBounds = x >= 395 && x <= 705 && y >= 278 && y <= 522;
     } else {
       // Study: updated room coordinates (Feature 2)
       const inStudy   = x >= 64  && x <= 736  && y >= 360 && y <= 748;
@@ -1460,7 +1967,7 @@ class GameScene extends Phaser.Scene {
     }
     if (!inBounds) return;
     if (this._diyColliding) return;
-    this._diyCreateItem(this.diyType, x, y, this.diyRotation);
+    this._diyCreateItem(this.diyType, x, y, this.diyRotation, this.diyImgKey);
     this._saveDIYLayout();
     this.exitDIYPlacement();
   }
@@ -1493,7 +2000,7 @@ class GameScene extends Phaser.Scene {
     return rect;
   }
 
-  _diyCreateItem(type, cx, cy, rotation) {
+  _diyCreateItem(type, cx, cy, rotation, imgKey = null) {
     const def = DIY_DEFS[type];
     if (!def) return;
     const angleDeg = rotation * 90;
@@ -1502,10 +2009,32 @@ class GameScene extends Phaser.Scene {
     const colH     = swapped ? def.w : def.h;
 
     const obj = {
-      type, cx, cy, rotation,
+      type, cx, cy, rotation, imgKey: imgKey || null,
       halfW: colW / 2, halfH: colH / 2,
       containers: [], colliders: [], chairIds: [], chairDetails: [],
     };
+
+    const useImage = !!(imgKey && this.textures.exists(imgKey));
+    // Directional chairs use pre-drawn directional sprites — no Phaser rotation needed
+    const isDirectionalChair = type === 'chair' && !!CHAIR_IMG_LOOKUP[imgKey];
+    // Compute chair side early (all chair types use all 4 CHAIR_SIDES directions)
+    const chairSide = type === 'chair' ? (CHAIR_SIDES[rotation] ?? 'south') : null;
+
+    // ── PNG sprite visual (when imgKey provided) ──────────────────────────
+    if (useImage) {
+      const frame = this.textures.getFrame(imgKey);
+      if (frame) {
+        obj.halfW = frame.realWidth  / 2;
+        obj.halfH = frame.realHeight / 2;
+      }
+      const imgAngle = (type === 'chair') ? 0 : angleDeg;
+      const img = this.add.image(0, 0, imgKey).setAngle(imgAngle);
+      // Depth = bottom edge of sprite so player sorts correctly when walking past furniture
+      const containerDepth = cy + obj.halfH;
+      const c   = this.add.container(cx, cy).setDepth(containerDepth);
+      c.add(img);
+      obj.containers.push(c);
+    }
 
     const wrapC = (fi, x, y, hw, hh) => {
       const c = this._diyWrapContainer(fi, x, y, hw, hh, angleDeg);
@@ -1517,22 +2046,34 @@ class GameScene extends Phaser.Scene {
       obj.colliders.push(r);
       return r;
     };
-    const addChair = (side, wx, wy, type = undefined) => {
-      const ch = new Furniture.Chair(this, 0, 0, side);
-      const c  = wrapC(ch, wx, wy, 16, 18);
+    const addChair = (side, wx, wy, ctype = undefined) => {
       const id = `diy-ch-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
       const entry = { id, seatX: wx, seatY: wy, side, occupied: false };
-      if (type) entry.type = type;
+      if (ctype) entry.type = ctype;
       this.chairs.push(entry);
       obj.chairIds.push(id);
-      obj.chairDetails.push({ id, container: c, seatX: wx, seatY: wy });
+      if (!useImage) {
+        const ch = new Furniture.Chair(this, 0, 0, side);
+        const c  = wrapC(ch, wx, wy, 16, 18);
+        obj.chairDetails.push({ id, container: c, seatX: wx, seatY: wy });
+      } else {
+        obj.chairDetails.push({ id, container: null, seatX: wx, seatY: wy });
+      }
     };
 
     switch (type) {
       case 'chair': {
-        const side = (rotation === 2 || rotation === 3) ? 'north' : 'south';
-        const ch   = new Furniture.Chair(this, 0, 0, side);
-        wrapC(ch, cx, cy, def.w / 2, def.h / 2);
+        // All chair types use all 4 directions; chairSide already computed above
+        const side = chairSide;
+        if (!useImage) {
+          const spriteSide = side === 'east' ? 'west' : side; // east = mirrored west
+          const ch = new Furniture.Chair(this, 0, 0, spriteSide);
+          wrapC(ch, cx, cy, def.w / 2, def.h / 2);
+          if (side === 'east') {
+            const gfx = Array.isArray(ch.graphics) ? ch.graphics : [ch.graphics];
+            gfx.forEach(g => { if (g) g.scaleX = -1; });
+          }
+        }
         const id = `diy-ch-${Date.now()}`;
         this.chairs.push({ id, seatX: cx, seatY: cy, side, occupied: false });
         obj.chairIds.push(id);
@@ -1540,128 +2081,127 @@ class GameScene extends Phaser.Scene {
       }
 
       case 'plant': {
-        const pl = new Furniture.Plant(this, 0, 0);
-        if (pl.collider) { pl.collider.destroy(); pl.collider = null; }
-        wrapC(pl, cx, cy, def.w / 2, def.h / 2);
+        if (!useImage) {
+          const pl = new Furniture.Plant(this, 0, 0);
+          if (pl.collider) { pl.collider.destroy(); pl.collider = null; }
+          wrapC(pl, cx, cy, def.w / 2, def.h / 2);
+        }
         addCol(cx, cy, colW, colH);
         break;
       }
 
       case 'shelf': {
-        const sh = new Furniture.Bookshelf(this, 0, 0);
-        if (sh.collider) { sh.collider.destroy(); sh.collider = null; }
-        wrapC(sh, cx, cy, def.w / 2, def.h / 2);
+        if (!useImage) {
+          const sh = new Furniture.Bookshelf(this, 0, 0);
+          if (sh.collider) { sh.collider.destroy(); sh.collider = null; }
+          wrapC(sh, cx, cy, def.w / 2, def.h / 2);
+        }
         addCol(cx, cy, colW, colH);
         break;
       }
 
       case 'desk-solo': {
-        const ds = new Furniture.DeskSolo(this, 0, 0);
-        if (ds.collider) { ds.collider.destroy(); ds.collider = null; }
-        wrapC(ds, cx, cy, def.w / 2, def.h / 2);
+        if (!useImage) {
+          const ds = new Furniture.DeskSolo(this, 0, 0);
+          if (ds.collider) { ds.collider.destroy(); ds.collider = null; }
+          wrapC(ds, cx, cy, def.w / 2, def.h / 2);
+        }
         addCol(cx, cy, colW, colH + 8);
-        const gap = 30;
-        const sSide = (rotation === 2 || rotation === 3) ? 'north' : 'south';
-        const sPos  = this._diyLocalToWorld(cx, cy, 0, def.h / 2 + gap, rotation);
-        addChair(sSide, sPos.x, sPos.y);
         break;
       }
 
       case 'desk-two': {
-        const dt = new Furniture.DeskTwo(this, 0, 0);
-        if (dt.collider) { dt.collider.destroy(); dt.collider = null; }
-        wrapC(dt, cx, cy, def.w / 2, def.h / 2);
+        if (!useImage) {
+          const dt = new Furniture.DeskTwo(this, 0, 0);
+          if (dt.collider) { dt.collider.destroy(); dt.collider = null; }
+          wrapC(dt, cx, cy, def.w / 2, def.h / 2);
+        }
         addCol(cx, cy, colW, colH + 8);
-        const gap2   = 30;
-        const nSide2 = (rotation === 2 || rotation === 3) ? 'south' : 'north';
-        const sSide2 = (rotation === 2 || rotation === 3) ? 'north' : 'south';
-        addChair(nSide2, ...Object.values(this._diyLocalToWorld(cx, cy, 0, -(def.h / 2 + gap2), rotation)));
-        addChair(sSide2, ...Object.values(this._diyLocalToWorld(cx, cy, 0,  (def.h / 2 + gap2), rotation)));
         break;
       }
 
       case 'desk-four': {
-        const df = new Furniture.DeskFour(this, 0, 0);
-        if (df.collider) { df.collider.destroy(); df.collider = null; }
-        wrapC(df, cx, cy, def.w / 2, def.h / 2);
-        addCol(cx, cy, colW, colH + 16);
-        const gap4   = 32;
-        const nSide4 = (rotation === 2 || rotation === 3) ? 'south' : 'north';
-        const sSide4 = (rotation === 2 || rotation === 3) ? 'north' : 'south';
-        for (let i = 0; i < 2; i++) {
-          const lx = -def.w / 4 + i * (def.w / 2);
-          addChair(nSide4, ...Object.values(this._diyLocalToWorld(cx, cy, lx, -(def.h / 2 + gap4), rotation)));
-          addChair(sSide4, ...Object.values(this._diyLocalToWorld(cx, cy, lx,  (def.h / 2 + gap4), rotation)));
+        if (!useImage) {
+          const df = new Furniture.DeskFour(this, 0, 0);
+          if (df.collider) { df.collider.destroy(); df.collider = null; }
+          wrapC(df, cx, cy, def.w / 2, def.h / 2);
         }
+        addCol(cx, cy, colW, colH + 16);
         break;
       }
 
       case 'desk-six': {
-        const d6 = new Furniture.Desk(this, 0, 0);
-        if (d6.collider) { d6.collider.destroy(); d6.collider = null; }
-        wrapC(d6, cx, cy, def.w / 2, def.h / 2);
-        addCol(cx, cy, colW, colH + 16);
-        const gap6   = 24;
-        const nSide6 = (rotation === 2 || rotation === 3) ? 'south' : 'north';
-        const sSide6 = (rotation === 2 || rotation === 3) ? 'north' : 'south';
-        [-64, 0, 64].forEach(lx => {
-          addChair(nSide6, ...Object.values(this._diyLocalToWorld(cx, cy, lx, -(def.h / 2 + gap6), rotation)));
-          addChair(sSide6, ...Object.values(this._diyLocalToWorld(cx, cy, lx,  (def.h / 2 + gap6), rotation)));
-        });
+        if (!useImage) {
+          const d6 = new Furniture.Desk(this, 0, 0);
+          if (d6.collider) { d6.collider.destroy(); d6.collider = null; }
+          wrapC(d6, cx, cy, def.w / 2, def.h / 2);
+        }
+        // When using an image, fit the collider to the actual image size.
+        let effColW = colW, effColH = colH;
+        if (useImage) {
+          const frame = this.textures.getFrame(imgKey);
+          if (frame?.realWidth) { effColW = frame.realWidth; effColH = frame.realHeight; }
+        }
+        addCol(cx, cy, effColW, effColH);
         break;
       }
 
       case 'kitchen-table': {
-        const kt = new Furniture.KitchenTable(this, 0, 0);
-        if (kt.collider) { kt.collider.destroy(); kt.collider = null; }
-        wrapC(kt, cx, cy, def.w / 2, def.h / 2);
+        if (!useImage) {
+          const kt = new Furniture.KitchenTable(this, 0, 0);
+          if (kt.collider) { kt.collider.destroy(); kt.collider = null; }
+          wrapC(kt, cx, cy, def.w / 2, def.h / 2);
+        }
         addCol(cx, cy, colW, colH + 8);
-        const gapKT = 30;
-        const nKT = (rotation === 2 || rotation === 3) ? 'south' : 'north';
-        const sKT = (rotation === 2 || rotation === 3) ? 'north' : 'south';
-        [-32, 32].forEach(lx => {
-          addChair(nKT, ...Object.values(this._diyLocalToWorld(cx, cy, lx, -(def.h / 2 + gapKT), rotation)), 'dining');
-          addChair(sKT, ...Object.values(this._diyLocalToWorld(cx, cy, lx,  (def.h / 2 + gapKT), rotation)), 'dining');
-        });
         break;
       }
 
       case 'kitchen-bench': {
-        const kb = new Furniture.KitchenBench(this, 0, 0);
-        if (kb.collider) { kb.collider.destroy(); kb.collider = null; }
-        wrapC(kb, cx, cy, def.w / 2, def.h / 2);
+        if (!useImage) {
+          const kb = new Furniture.KitchenBench(this, 0, 0);
+          if (kb.collider) { kb.collider.destroy(); kb.collider = null; }
+          wrapC(kb, cx, cy, def.w / 2, def.h / 2);
+        }
         addCol(cx, cy, colW, colH);
         break;
       }
 
       case 'stove': {
-        const sv = new Furniture.Stove(this, 0, 0);
-        if (sv.collider) { sv.collider.destroy(); sv.collider = null; }
-        wrapC(sv, cx, cy, def.w / 2, def.h / 2);
+        if (!useImage) {
+          const sv = new Furniture.Stove(this, 0, 0);
+          if (sv.collider) { sv.collider.destroy(); sv.collider = null; }
+          wrapC(sv, cx, cy, def.w / 2, def.h / 2);
+        }
         addCol(cx, cy, colW, colH);
         break;
       }
 
       case 'fridge': {
-        const fr = new Furniture.Fridge(this, 0, 0);
-        if (fr.collider) { fr.collider.destroy(); fr.collider = null; }
-        wrapC(fr, cx, cy, def.w / 2, def.h / 2);
+        if (!useImage) {
+          const fr = new Furniture.Fridge(this, 0, 0);
+          if (fr.collider) { fr.collider.destroy(); fr.collider = null; }
+          wrapC(fr, cx, cy, def.w / 2, def.h / 2);
+        }
         addCol(cx, cy, colW, colH);
         break;
       }
 
       case 'coffee-machine': {
-        const cmD = new Furniture.CoffeeMachine(this, 0, 0);
-        if (cmD.collider) { cmD.collider.destroy(); cmD.collider = null; }
-        wrapC(cmD, cx, cy, def.w / 2, def.h / 2);
+        if (!useImage) {
+          const cmD = new Furniture.CoffeeMachine(this, 0, 0);
+          if (cmD.collider) { cmD.collider.destroy(); cmD.collider = null; }
+          wrapC(cmD, cx, cy, def.w / 2, def.h / 2);
+        }
         addCol(cx, cy, colW, colH);
         break;
       }
 
       case 'bean-bag': {
-        const bbD = new Furniture.BeanBag(this, 0, 0, 'teal');
-        if (bbD.collider) { bbD.collider.destroy(); bbD.collider = null; }
-        wrapC(bbD, cx, cy, def.w / 2, def.h / 2);
+        if (!useImage) {
+          const bbD = new Furniture.BeanBag(this, 0, 0, 'teal');
+          if (bbD.collider) { bbD.collider.destroy(); bbD.collider = null; }
+          wrapC(bbD, cx, cy, def.w / 2, def.h / 2);
+        }
         addCol(cx, cy, colW, colH);
         const bbId = `diy-bb-${Date.now()}`;
         this.chairs.push({ id: bbId, seatX: cx, seatY: cy, side: 'north', occupied: false, type: 'beanbag' });
@@ -1670,7 +2210,7 @@ class GameScene extends Phaser.Scene {
       }
     }
 
-    this.diyPlaced.push({ type, cx, cy, rotation });
+    this.diyPlaced.push({ type, cx, cy, rotation, imgKey: imgKey || null });
     this.diyObjects.push(obj);
   }
 
@@ -1685,24 +2225,38 @@ class GameScene extends Phaser.Scene {
   }
 
   _loadDIYLayout() {
-    // Apply any layout received from server before scene started
-    if (window._pendingRoomLayout) {
-      const layout = window._pendingRoomLayout;
-      window._pendingRoomLayout = null;
-      layout.forEach(({ type, cx, cy, rotation }) => {
-        try { this._diyCreateItem(type, cx, cy, rotation); } catch(_) {}
+    // Only use server-pending layout if it's non-empty (empty [] means server has no saved layout yet)
+    const pending = window._pendingRoomLayout;
+    window._pendingRoomLayout = null;
+    if (Array.isArray(pending) && pending.length > 0) {
+      pending.forEach(({ type, cx, cy, rotation, imgKey }) => {
+        try { this._diyCreateItem(type, cx, cy, rotation, imgKey || null); } catch(_) {}
       });
-      // Also update local cache
       try { localStorage.setItem(this._diyStorageKey(), JSON.stringify(this.diyPlaced)); } catch(_) {}
       return;
     }
+
+    // Try localStorage (non-empty)
     try {
       const raw = localStorage.getItem(this._diyStorageKey());
-      if (!raw) return;
-      JSON.parse(raw).forEach(({ type, cx, cy, rotation }) => {
-        this._diyCreateItem(type, cx, cy, rotation);
-      });
+      if (raw) {
+        const items = JSON.parse(raw);
+        if (items.length > 0) {
+          items.forEach(({ type, cx, cy, rotation, imgKey }) => {
+            this._diyCreateItem(type, cx, cy, rotation, imgKey || null);
+          });
+          this.time.delayedCall(200, () => window.socket?.emit('getLayout'));
+          return;
+        }
+      }
     } catch (_) {}
+
+    // Nothing usable — place defaults immediately so the room never appears empty
+    DEMO_DEFAULT_LAYOUT.forEach(({ type, cx, cy, rotation, imgKey }) => {
+      try { this._diyCreateItem(type, cx, cy, rotation, imgKey); } catch (_) {}
+    });
+    try { localStorage.setItem(this._diyStorageKey(), JSON.stringify(this.diyPlaced)); } catch (_) {}
+    this.time.delayedCall(200, () => window.socket?.emit('getLayout'));
   }
 
   /** Apply a room layout broadcast from the server (other players seeing creator's changes). */
@@ -1717,26 +2271,16 @@ class GameScene extends Phaser.Scene {
     this.diyPlaced   = [];
     this.diySelectedObj = null;
     // Place all items from the new layout
-    items.forEach(({ type, cx, cy, rotation }) => {
-      try { this._diyCreateItem(type, cx, cy, rotation); } catch(_) {}
+    items.forEach(({ type, cx, cy, rotation, imgKey }) => {
+      try { this._diyCreateItem(type, cx, cy, rotation, imgKey || null); } catch(_) {}
     });
     // Update local cache
     try { localStorage.setItem(this._diyStorageKey(), JSON.stringify(this.diyPlaced)); } catch(_) {}
     this._buildChairGroups();
   }
 
-  /** Update another player's sprite when their appearance changes. */
-  _updateOtherAppearance(id, gender, shirtColor) {
-    const sprite = this.otherPlayers[id];
-    if (!sprite) return;
-    const texPrefix = `player_${gender}_${shirtColor}`;
-    if (!this.textures.exists(texPrefix + '_down_0')) {
-      window.PixelSprites.createPlayerTextures(this, gender, shirtColor);
-    }
-    sprite.setTexture(texPrefix + '_down_0');
-    // Re-setup animations for this player if needed
-    window.PixelSprites.createPlayerTextures(this, gender, shirtColor);
-  }
+  /** Appearance is now auto-assigned from name — no-op for legacy socket events. */
+  _updateOtherAppearance(_id, _gender, _shirtColor) {}
 
   // ── DIY Creator mode ──────────────────────────────────────────────────────
 
@@ -1785,6 +2329,20 @@ class GameScene extends Phaser.Scene {
       this._diyHoverG.lineStyle(2, 0x00e5ff, 1);
       this._diyHoverG.strokeRect(s.cx - s.halfW - 3, s.cy - s.halfH - 3,
                                   s.halfW * 2 + 6, s.halfH * 2 + 6);
+      // Green facing arrow for all chairs
+      if (s.type === 'chair') {
+        const { ax, ay } = CHAIR_ARROW_DIRS[s.rotation ?? 0];
+        const shaft = 16, head = 9, hw = 5;
+        this._diyHoverG.lineStyle(2, 0x00ff88, 0.85);
+        this._diyHoverG.fillStyle(0x00ff88, 0.85);
+        this._diyHoverG.lineBetween(s.cx, s.cy, s.cx + ax * shaft, s.cy + ay * shaft);
+        const bx = s.cx + ax * shaft, by = s.cy + ay * shaft;
+        this._diyHoverG.fillTriangle(
+          bx - ay * hw, by + ax * hw,
+          bx + ay * hw, by - ax * hw,
+          s.cx + ax * (shaft + head), s.cy + ay * (shaft + head)
+        );
+      }
     }
 
     if (hovered && hovered !== this.diySelectedObj) {
@@ -1828,6 +2386,50 @@ class GameScene extends Phaser.Scene {
     }
   }
 
+  _diyDragUpdate(ptr) {
+    const obj = this._diyDragObj;
+    if (!obj) return;
+    const newCX = Math.round((ptr.worldX - this._diyDragOffX) / 16) * 16;
+    const newCY = Math.round((ptr.worldY - this._diyDragOffY) / 16) * 16;
+    const dx = newCX - obj.cx;
+    const dy = newCY - obj.cy;
+    if (dx === 0 && dy === 0) return;
+    obj.containers.forEach(c => {
+      c.x += dx; c.y += dy;
+      c.setDepth(obj.type === 'chair' ? (CHAIR_SIDES[obj.rotation] === 'north' ? c.y + 100 : c.y) : c.y + obj.halfH * 2);
+    });
+    obj.cx = newCX;
+    obj.cy = newCY;
+    if (this._diyHoverG) {
+      this._diyHoverG.clear();
+      this._diyHoverG.lineStyle(2, 0x00e5ff, 1);
+      this._diyHoverG.strokeRect(obj.cx - obj.halfW - 3, obj.cy - obj.halfH - 3,
+                                  obj.halfW * 2 + 6, obj.halfH * 2 + 6);
+    }
+  }
+
+  _diyEndDrag() {
+    this._diyIsDragging = false;
+    const obj = this._diyDragObj;
+    this._diyDragObj = null;
+    if (!obj) return;
+    const { type, cx, cy, rotation, imgKey } = obj;
+    // Destroy and recreate at new position to properly update colliders + chair seats
+    this._diyDestroyObj(obj);
+    const oi = this.diyObjects.indexOf(obj);
+    if (oi !== -1) this.diyObjects.splice(oi, 1);
+    this._diyCreateItem(type, cx, cy, rotation, imgKey || null);
+    const newObj = this.diyObjects[this.diyObjects.length - 1];
+    this._buildChairGroups();
+    // Rebuild diyPlaced from current objects
+    this.diyPlaced = this.diyObjects
+      .filter(o => !o.isStatic)
+      .map(o => ({ type: o.type, cx: o.cx, cy: o.cy, rotation: o.rotation, imgKey: o.imgKey || null }));
+    this._showInlineControls(newObj);
+    this.diySelectedObj = newObj;
+    this._saveDIYLayout();
+  }
+
   _persistHideStatic(type, cx, cy) {
     try {
       const hidden = JSON.parse(localStorage.getItem('studyspace_hidden_statics') || '[]');
@@ -1869,6 +2471,13 @@ class GameScene extends Phaser.Scene {
     const { type, cx, cy, rotation } = obj;
     const newRot = ((rotation + dir) % 4 + 4) % 4;
 
+    // For directional chairs, advance the sprite to match the new rotation
+    let newImgKey = obj.imgKey || null;
+    if (type === 'chair' && newImgKey && CHAIR_IMG_LOOKUP[newImgKey]) {
+      const { base } = CHAIR_IMG_LOOKUP[newImgKey];
+      newImgKey = CHAIR_SETS[base][newRot];
+    }
+
     this._hideInlineControls();
     this._diyDestroyObj(obj);
 
@@ -1886,7 +2495,7 @@ class GameScene extends Phaser.Scene {
 
     this.diySelectedObj = null;
 
-    this._diyCreateItem(type, cx, cy, newRot);
+    this._diyCreateItem(type, cx, cy, newRot, newImgKey);
     this._diySelectObject(this.diyObjects[this.diyObjects.length - 1]);
     this._saveDIYLayout();
   }
@@ -1907,8 +2516,8 @@ class GameScene extends Phaser.Scene {
       padding: { x: 5, y: 3 },
     };
     const btns = [
-      { icon: '↺', dx: -32, action: () => this._diyRotateSelected(-1) },
-      { icon: '↻', dx:   0, action: () => this._diyRotateSelected( 1) },
+      { icon: '↺', dx: -32, action: () => this._diyRotateSelected( 1) },
+      { icon: '↻', dx:   0, action: () => this._diyRotateSelected(-1) },
       { icon: '🗑', dx:  32, action: () => this._diyDeleteSelected()   },
     ];
     this._inlineButtons = btns.map(({ icon, dx, action }) => {
@@ -1940,9 +2549,14 @@ class GameScene extends Phaser.Scene {
   _diyCheckCollision(cx, cy) {
     const def = DIY_DEFS[this.diyType];
     if (!def) return false;
+    let bw = def.w, bh = def.h;
+    if (this.diyImgKey && this.textures.exists(this.diyImgKey)) {
+      const frame = this.textures.getFrame(this.diyImgKey);
+      if (frame) { bw = frame.realWidth; bh = frame.realHeight; }
+    }
     const swapped = this.diyRotation === 1 || this.diyRotation === 3;
-    const halfW = (swapped ? def.h : def.w) / 2;
-    const halfH = (swapped ? def.w : def.h) / 2;
+    const halfW = (swapped ? bh : bw) / 2;
+    const halfH = (swapped ? bw : bh) / 2;
     return this.diyObjects.some(obj =>
       cx - halfW < obj.cx + obj.halfW &&
       cx + halfW > obj.cx - obj.halfW &&
@@ -2616,22 +3230,19 @@ class GameScene extends Phaser.Scene {
   // ── Social / Multiplayer methods ──────────────────────────────────────────
 
   _spawnOtherPlayer(data) {
-    // data = { id, name, gender, shirtColor, x, y, chatPreference }
+    // data = { id, name, gender, shirtColor, x, y, chatPreference, charNum }
     if (this.otherPlayers[data.id]) return;
-    const gender = data.gender || 'male';
-    const shirtColor = data.shirtColor || 'blue';
-    const texPrefix = `player_${gender}_${shirtColor}`;
-    if (!this.textures.exists(texPrefix + '_down_0')) {
-      window.PixelSprites.createPlayerTextures(this, gender, shirtColor);
-    }
-    const texKey = texPrefix + '_down_0';
+    const nn = data.charNum || '01';
+    const prefix = window.PixelSprites.ensureCharTextures(this, nn);
+    data._texPrefix = prefix;
+    const texKey = `${prefix}_idle`;
     const sprite = this.add.sprite(data.x, data.y, texKey)
       .setOrigin(0.5, 1).setDepth(data.y);
     sprite.setInteractive();
     sprite.on('pointerdown', () => {
       this._showPlayerCard(data);
     });
-    const nameTag = this.add.text(data.x, data.y - 52, data.name, {
+    const nameTag = this.add.text(data.x, data.y - 72, data.name, {
       fontFamily: '"Press Start 2P", monospace', fontSize: '6px',
       color: '#ffffff', stroke: '#000000', strokeThickness: 3,
       backgroundColor: '#1a0b2ecc', padding: { x: 3, y: 2 },
@@ -2641,7 +3252,7 @@ class GameScene extends Phaser.Scene {
     sprite.on('pointerout',  () => { sprite.clearTint();        nameTag.setVisible(false); });
 
     // Floating status icon above the other player's head
-    const statusIcon = this.add.image(data.x, data.y - 54, 'icon_book')
+    const statusIcon = this.add.image(data.x, data.y - 58, 'icon_book')
       .setVisible(false).setOrigin(0.5, 1).setScale(0.85).setDepth(data.y + 30);
 
     this.otherPlayers[data.id] = { sprite, nameTag, chatBubble: null, statusIcon, data };
@@ -2654,9 +3265,9 @@ class GameScene extends Phaser.Scene {
     const op = this.otherPlayers[id];
     if (!op) return;
     op.sprite.setPosition(x, y).setDepth(y);
-    op.nameTag.setPosition(x, y - 52).setDepth(y + 35);
+    op.nameTag.setPosition(x, y - 72).setDepth(y + 35);
     if (op.chatBubble) op.chatBubble.setPosition(x, y - 72).setDepth(y + 36);
-    if (op.statusIcon) op.statusIcon.setPosition(x, y - 54).setDepth(y + 30);
+    if (op.statusIcon) op.statusIcon.setPosition(x, y - 58).setDepth(y + 30);
     op.data.x = x;
     op.data.y = y;
   }

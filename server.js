@@ -11,8 +11,22 @@ const TWITCH_CONFIG_PATH = path.join(__dirname, 'data', 'twitch-config.json');
 const TWITCH_TOKEN_PATH  = path.join(__dirname, 'data', 'twitch-token.json');
 
 const ROOM_CONFIGS = [
-  { id: 'derbysaren',     creatorLogin: 'derbysaren',     name: "Derby's Study Space",   path: '/play', theme: 'study' },
-  { id: 'derrizzmachine', creatorLogin: 'derrizzmachine', name: "DerRizzMachine's Café", path: '/cafe', theme: 'cafe'  },
+  { id: 'derbysaren',     creatorLogin: 'derbysaren',     name: "Derby's Study Space",   path: '/demo', theme: 'demo'  },
+  { id: 'demo',           creatorLogin: 'demo',           name: 'Demo Room',             path: '/demo', theme: 'demo'  },
+  { id: 'derrizzmachine', creatorLogin: 'derrizzmachine', name: "DerRizzMachine's Café", path: '/play', theme: 'study' },
+];
+
+// Default room furniture — tilemap interior centre TX=550, TY=400 (map at 358,240; 12×10 tiles; 1-tile walls).
+const DEFAULT_DEMO_LAYOUT = [
+  { type: 'desk-six', cx: 550, cy: 400, rotation: 0, imgKey: 'furn_big_table' },
+  { type: 'chair', cx: 508, cy: 345, rotation: 0, imgKey: 'furn_cl_1' },
+  { type: 'chair', cx: 536, cy: 345, rotation: 0, imgKey: 'furn_cl_1' },
+  { type: 'chair', cx: 564, cy: 345, rotation: 0, imgKey: 'furn_cl_1' },
+  { type: 'chair', cx: 592, cy: 345, rotation: 0, imgKey: 'furn_cl_1' },
+  { type: 'chair', cx: 508, cy: 455, rotation: 2, imgKey: 'furn_cl_2' },
+  { type: 'chair', cx: 536, cy: 455, rotation: 2, imgKey: 'furn_cl_2' },
+  { type: 'chair', cx: 564, cy: 455, rotation: 2, imgKey: 'furn_cl_2' },
+  { type: 'chair', cx: 592, cy: 455, rotation: 2, imgKey: 'furn_cl_2' },
 ];
 
 function loadTasks() {
@@ -58,7 +72,7 @@ function getRoomState(roomId) {
       players:       {},
       clientIdMap:   {},
       seatOccupancy: {},
-      roomLayout:    null,
+      roomLayout:    [...DEFAULT_DEMO_LAYOUT],
       rolesData:     loadRolesForRoom(roomId),
       activeCalls:   {},
     });
@@ -79,6 +93,9 @@ app.get('/play', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 app.get('/cafe', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+app.get('/demo', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
@@ -147,6 +164,15 @@ function loadCreatorCodes() {
 }
 function saveCreatorCodes(codes) {
   try { fs.mkdirSync(path.dirname(CREATOR_CODES_PATH), { recursive: true }); fs.writeFileSync(CREATOR_CODES_PATH, JSON.stringify(codes, null, 2)); } catch(e) {}
+}
+
+const STREAMER_INTEREST_PATH = path.join(__dirname, 'data', 'streamer-interest.json');
+function loadStreamerInterest() {
+  try { if (fs.existsSync(STREAMER_INTEREST_PATH)) return JSON.parse(fs.readFileSync(STREAMER_INTEREST_PATH, 'utf8')); } catch(e) {}
+  return [];
+}
+function saveStreamerInterest(list) {
+  try { fs.mkdirSync(path.dirname(STREAMER_INTEREST_PATH), { recursive: true }); fs.writeFileSync(STREAMER_INTEREST_PATH, JSON.stringify(list, null, 2)); } catch(e) {}
 }
 
 // ── Twitch integration ────────────────────────────────────
@@ -370,6 +396,7 @@ app.get('/auth/twitch/callback', async (req, res) => {
       playerSessions.set(token, {
         name:        user?.display_name || user?.login || 'Viewer',
         twitchLogin: user?.login || null,
+        twitchEmail: user?.email || null,
         googleEmail: null,
         profilePic:  user?.profile_image_url || null,
         authType:    'twitch',
@@ -438,7 +465,7 @@ app.get('/api/session/:token', (req, res) => {
     return res.status(404).json({ error: 'invalid' });
   }
   playerSessions.delete(req.params.token);
-  res.json({ name: session.name, twitchLogin: session.twitchLogin, googleEmail: session.googleEmail || null, profilePic: session.profilePic, authType: session.authType || 'twitch' });
+  res.json({ name: session.name, twitchLogin: session.twitchLogin, twitchEmail: session.twitchEmail || null, googleEmail: session.googleEmail || null, profilePic: session.profilePic, authType: session.authType || 'twitch' });
 });
 
 app.get('/api/twitch/status', (req, res) => {
@@ -473,6 +500,31 @@ app.get('/api/spaces', (req, res) => {
     return sB - sA;
   });
   res.json(spaces);
+});
+
+app.post('/api/streamer-interest', (req, res) => {
+  const { name, email, twitchHandle, spaceFor, message } = req.body || {};
+  if (!email && !twitchHandle) return res.status(400).json({ ok: false, error: 'Need at least an email or Twitch handle.' });
+  const list = loadStreamerInterest();
+  const duplicate = list.find(e => (email && e.email === email.trim()) || (twitchHandle && e.twitchHandle === twitchHandle.trim().replace(/^@/, '')));
+  if (duplicate) return res.json({ ok: true, alreadyRegistered: true });
+  list.push({
+    name:         name?.trim() || null,
+    email:        email?.trim() || null,
+    twitchHandle: twitchHandle?.trim().replace(/^@/, '') || null,
+    spaceFor:     spaceFor || null,
+    message:      message?.trim() || null,
+    submittedAt:  new Date().toISOString(),
+    ip:           req.socket.remoteAddress,
+  });
+  saveStreamerInterest(list);
+  res.json({ ok: true });
+});
+
+app.get('/admin/streamer-interest', (req, res) => {
+  const ip = req.socket.remoteAddress;
+  if (!['127.0.0.1','::1','::ffff:127.0.0.1'].includes(ip)) return res.status(403).send('Forbidden');
+  res.json(loadStreamerInterest());
 });
 
 app.post('/api/creator-codes/validate', (req, res) => {
@@ -554,7 +606,7 @@ io.on('connection', (socket) => {
   socket.emit('init', { tasks: globalTasks });
 
   // ── Player join ──────────────────────────────────────────
-  socket.on('playerJoin', ({ name, gender, shirtColor, clientId, twitchLogin, roomId, startX, startY }) => {
+  socket.on('playerJoin', ({ name, gender, shirtColor, charNum, clientId, twitchLogin, roomId, startX, startY }) => {
     // Resolve room
     const cfg = ROOM_CONFIGS.find(r => r.id === roomId);
     const safeRoomId = cfg ? cfg.id : 'derbysaren';
@@ -599,12 +651,13 @@ io.on('connection', (socket) => {
       role = getRoleForRoom(safeClientId, safeRoomId);
     }
 
-    const safeColor  = ['blue','red','green','purple'].includes(shirtColor) ? shirtColor : 'blue';
-    const safeGender = gender === 'female' ? 'female' : 'male';
+    const safeColor   = ['blue','red','green','purple'].includes(shirtColor) ? shirtColor : 'blue';
+    const safeGender  = gender === 'female' ? 'female' : 'male';
+    const safeCharNum = (typeof charNum === 'string' && /^\d{2}$/.test(charNum) && parseInt(charNum) >= 1 && parseInt(charNum) <= 20) ? charNum : '01';
     const sx = (typeof startX === 'number' && startX >= 32 && startX <= 1068) ? Math.round(startX) : 400;
     const sy = (typeof startY === 'number' && startY >= 32 && startY <= 764)  ? Math.round(startY) : 560;
 
-    rs.players[socket.id] = { id: socket.id, clientId: safeClientId || socket.id, name: safeName, gender: safeGender, shirtColor: safeColor, x: sx, y: sy, chatPreference: 'sociable', role, friends: [], pendingFrom: [], pendingMessages: [] };
+    rs.players[socket.id] = { id: socket.id, clientId: safeClientId || socket.id, name: safeName, gender: safeGender, shirtColor: safeColor, charNum: safeCharNum, x: sx, y: sy, chatPreference: 'sociable', role, friends: [], pendingFrom: [], pendingMessages: [] };
 
     emitR('playerCount', Object.keys(rs.players).length);
     socket.emit('yourRole', { role });
@@ -613,10 +666,10 @@ io.on('connection', (socket) => {
 
     socket.emit('existingPlayers', Object.values(rs.players)
       .filter(p => p.id !== socket.id)
-      .map(p => ({ id: p.id, name: p.name, gender: p.gender, shirtColor: p.shirtColor, x: p.x, y: p.y, chatPreference: p.chatPreference, role: p.role || 'regular', statusIcon: p.statusIcon || null }))
+      .map(p => ({ id: p.id, name: p.name, gender: p.gender, shirtColor: p.shirtColor, charNum: p.charNum || '01', x: p.x, y: p.y, chatPreference: p.chatPreference, role: p.role || 'regular', statusIcon: p.statusIcon || null }))
     );
     socket.emit('spawnAt', { x: sx, y: sy });
-    bcast('playerJoined', { id: socket.id, name: safeName, gender: safeGender, shirtColor: safeColor, x: sx, y: sy, chatPreference: 'sociable', role, statusIcon: null });
+    bcast('playerJoined', { id: socket.id, name: safeName, gender: safeGender, shirtColor: safeColor, charNum: safeCharNum, x: sx, y: sy, chatPreference: 'sociable', role, statusIcon: null });
   });
 
   // ── Player movement ──────────────────────────────────────
@@ -756,8 +809,8 @@ io.on('connection', (socket) => {
   socket.on('unblockPlayer', ({ targetId }) => {
     const self = me(), target = P()[targetId];
     if (!self || !target) return;
-    socket.emit('playerJoined', { id: target.id, name: target.name, gender: target.gender, shirtColor: target.shirtColor, x: target.x, y: target.y, chatPreference: target.chatPreference, role: target.role || 'regular', statusIcon: target.statusIcon || null });
-    io.to(targetId).emit('playerJoined', { id: self.id, name: self.name, gender: self.gender, shirtColor: self.shirtColor, x: self.x, y: self.y, chatPreference: self.chatPreference, role: self.role || 'regular', statusIcon: self.statusIcon || null });
+    socket.emit('playerJoined', { id: target.id, name: target.name, gender: target.gender, shirtColor: target.shirtColor, charNum: target.charNum || '01', x: target.x, y: target.y, chatPreference: target.chatPreference, role: target.role || 'regular', statusIcon: target.statusIcon || null });
+    io.to(targetId).emit('playerJoined', { id: self.id, name: self.name, gender: self.gender, shirtColor: self.shirtColor, charNum: self.charNum || '01', x: self.x, y: self.y, chatPreference: self.chatPreference, role: self.role || 'regular', statusIcon: self.statusIcon || null });
   });
 
   // ── Role management ───────────────────────────────────────
@@ -814,6 +867,13 @@ io.on('connection', (socket) => {
     if (!Array.isArray(items)) return;
     R().roomLayout = items;
     bcast('roomLayout', items);
+  });
+
+  socket.on('getLayout', () => {
+    const rs = R(); if (!rs) return;
+    const rid = socket.data.roomId;
+    const layout = rs.roomLayout || [...DEFAULT_DEMO_LAYOUT];
+    socket.emit('roomLayout', layout);
   });
 
   // ── Appearance ────────────────────────────────────────────
