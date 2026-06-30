@@ -12,8 +12,8 @@ const TWITCH_TOKEN_PATH  = path.join(__dirname, 'data', 'twitch-token.json');
 
 const ROOM_CONFIGS = [
   { id: 'derbysaren',     creatorLogin: 'derbysaren',     name: "Derby's Study Space",   path: '/demo', theme: 'demo'  },
-  { id: 'demo',           creatorLogin: 'demo',           name: 'Demo Room',             path: '/demo', theme: 'demo'  },
-  { id: 'derrizzmachine', creatorLogin: 'derrizzmachine', name: "DerRizzMachine's Café", path: '/play', theme: 'study' },
+  { id: 'demo',           creatorLogin: 'demo',           name: 'Demo Room',             path: '/demo', theme: 'demo',  hidden: true },
+  { id: 'derrizzmachine', creatorLogin: 'derrizzmachine', name: "DerRizzMachine's Café", path: '/play', theme: 'study', hidden: true },
 ];
 
 // Default room furniture — tilemap interior centre TX=550, TY=400 (map at 358,240; 12×10 tiles; 1-tile walls).
@@ -475,7 +475,7 @@ app.get('/api/twitch/status', (req, res) => {
 app.get('/api/twitch/config', (req, res) => res.json({ configured: !!(twitchCfg.clientId && twitchCfg.clientSecret), connected: !!twitchToken?.twitchLogin, twitchUser: twitchToken?.twitchDisplayName || null, profileImageUrl: twitchToken?.profileImageUrl || null }));
 
 app.get('/api/spaces', (req, res) => {
-  const spaces = ROOM_CONFIGS.map(cfg => {
+  const spaces = ROOM_CONFIGS.filter(cfg => !cfg.hidden).map(cfg => {
     const rs  = getRoomState(cfg.id);
     const st  = roomSpaceStatus[cfg.id] || {};
     return {

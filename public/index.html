@@ -33,7 +33,7 @@
         <button id="stop-timer-btn"  class="pixel-btn small danger">■</button>
       </div>
       <div id="header-right">
-        <span id="coin-count" class="coin-count">🪙 0</span> <span style="font-size:9px;opacity:0.5;font-family:monospace">v3.29</span>
+        <span id="coin-count" class="coin-count">🪙 0</span> <span style="font-size:9px;opacity:0.5;font-family:monospace">v3.33</span>
         <div class="status-block">
           <span id="status-indicator" class="status-idle">● IDLE</span>
           <div class="audio-btns">
@@ -61,7 +61,7 @@
             <button id="add-task-btn" class="pixel-btn small">+</button>
           </div>
           <ul id="personal-task-list" class="task-list"></ul>
-          <div class="panel-empty" id="personal-empty">No tasks yet.<br/>Add one!</div>
+          <div class="panel-empty" id="personal-empty" style="font-size:13px;line-height:1.7;">No tasks yet.<br/>Add one!</div>
         </div>
 
         <div class="panel-divider"></div>
@@ -73,7 +73,7 @@
             <button id="clear-tasks-btn" class="pixel-btn small danger hidden" title="Clear all shared tasks">🗑</button>
           </div>
           <ul id="global-task-list" class="task-list"></ul>
-          <div class="panel-empty" id="global-empty">No tasks yet.</div>
+          <div class="panel-empty" id="global-empty" style="font-size:13px;line-height:1.7;">No tasks yet.</div>
         </div>
 
       </aside>
@@ -130,7 +130,7 @@
             IN THE SPACE <span id="members-online-count" class="online-count"></span>
           </div>
           <ul id="members-list">
-            <li class="members-empty">Just you here!<br/>Invite someone to study 🌷</li>
+            <li class="members-empty" style="font-size:12px;line-height:1.8;">Just you here!<br/>Invite someone to study 🌷<br/><button onclick="navigator.clipboard.writeText(location.href).then(()=>window.showToast?.('🔗 Link copied!'))" class="pixel-btn small" style="margin-top:8px;font-size:9px;">🔗 Invite</button></li>
           </ul>
 
           <!-- Offline friends -->
@@ -176,6 +176,7 @@
       <!-- Always visible: toggle row -->
       <div id="diy-toprow">
         <button id="diy-creator-toggle" class="pixel-btn small hidden">🔧 DIY CREATOR</button>
+        <span id="diy-wip-label" class="hidden" style="font-size:10px;color:#aaa;font-family:'Fira Code',monospace;margin-left:8px;align-self:center;">(In progress... feel free to play around!)</span>
       </div>
 
       <!-- Expanded creator panel -->
@@ -187,7 +188,6 @@
           <button class="diy-tab" data-tab="tables">📐 Tables</button>
           <button class="diy-tab" data-tab="decoration">🌿 Decor</button>
           <button class="diy-tab" data-tab="sets">🗂 Sets</button>
-          <button class="diy-tab" data-tab="kitchen">🍳 Kitchen</button>
           <button id="diy-exit-creator" class="pixel-btn small danger">✕ Exit</button>
         </div>
 
@@ -241,10 +241,6 @@
 
         <!-- Tables -->
         <div id="diy-tab-tables" class="diy-tab-content hidden">
-          <button class="diy-item-btn" data-type="desk-solo" data-img="furn_generic">
-            <img class="diy-thumb" src="assets/furniture/tables/1_Generic_Shadowless32x32.png" alt="Solo Desk">
-            <span>Solo Desk</span>
-          </button>
           <button class="diy-item-btn" data-type="desk-solo" data-img="furn_cl_6">
             <img class="diy-thumb" src="assets/furniture/tables/Classroom_and_Library_Singles_32x32_6.png" alt="Desk 6">
             <span>Desk A</span>
@@ -455,8 +451,8 @@
           </button>
         </div>
 
-        <!-- Kitchen items -->
-        <div id="diy-tab-kitchen" class="diy-tab-content hidden">
+        <!-- Kitchen items (hidden from DIY panel) -->
+        <div id="diy-tab-kitchen" class="diy-tab-content hidden" style="display:none!important">
           <button class="diy-item-btn" data-type="kitchen-table">
             <div class="diy-thumb diy-thumb-kitchen-table"></div>
             <span>Dining Table</span>

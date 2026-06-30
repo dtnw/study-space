@@ -304,6 +304,7 @@
   // ── Role events ───────────────────────────────────────────
   // DIY button is always visible (server guards the actual save operations)
   document.getElementById('diy-creator-toggle')?.classList.remove('hidden');
+  document.getElementById('diy-wip-label')?.classList.remove('hidden');
 
   socket.on('yourRole', ({ role }) => {
     // Client-side guard: guests and users whose twitchLogin isn't the owner
@@ -327,6 +328,7 @@
     window._refreshSpacesPanel?.();
     // DIY button always visible — server guards actual save operations
     document.getElementById('diy-creator-toggle')?.classList.remove('hidden');
+    document.getElementById('diy-wip-label')?.classList.remove('hidden');
   });
 
   socket.on('playerRoleUpdated', ({ id, role }) => {
@@ -1119,7 +1121,7 @@
     const allPlayers = Object.values(window._allPlayers || {}).filter(p => !_blockedIds.some(b => b.id === p.id));
     if (countEl) countEl.textContent = allPlayers.length > 0 ? allPlayers.length : '';
     if (allPlayers.length === 0) {
-      list.innerHTML = '<li class="members-empty">Just you here!<br/>Invite someone to study 🌷</li>';
+      list.innerHTML = '<li class="members-empty" style="font-size:12px;line-height:1.8;">Just you here!<br/>Invite someone to study 🌷<br/><button onclick="navigator.clipboard.writeText(location.href).then(()=>window.showToast?.(\'🔗 Link copied!\'))" class="pixel-btn small" style="margin-top:8px;font-size:9px;">🔗 Invite</button></li>';
       return;
     }
     const friends = window.socialState.friends || [];
