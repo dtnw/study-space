@@ -1,5 +1,5 @@
 /**
- * landing.js — Cozy Corner lobby page
+ * landing.js — Belong Here lobby page
  * Fetches available study spaces and renders room cards.
  * Uses Socket.io for real-time live-status updates.
  */

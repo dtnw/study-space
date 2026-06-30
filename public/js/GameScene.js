@@ -112,6 +112,7 @@ class GameScene extends Phaser.Scene {
       ['furn_cl_23',     'assets/furniture/tables/Classroom_and_Library_Singles_32x32_23.png'],
       ['furn_big_table', 'assets/furniture/tables/big table.png'],
       ['furn_stool',     'assets/furniture/tables/stool.png'],
+      ['double_books',   'assets/furniture/decor/double_books.png'],
       ['furn_cl_43',   'assets/furniture/decor/Classroom_and_Library_Singles_32x32_43.png'],
       ['furn_cl_44',   'assets/furniture/decor/Classroom_and_Library_Singles_32x32_44.png'],
       ['furn_cl_45',   'assets/furniture/decor/Classroom_and_Library_Singles_32x32_45.png'],
@@ -410,11 +411,21 @@ class GameScene extends Phaser.Scene {
     if (this._selfChatBubble && this._selfChatBubble.active) {
       this._selfChatBubble.setPosition(this.player.x, this.player.y - 72).setDepth(this.player.y + 40);
     }
-    // Bob other players' status icons in sync with own icon
+    // Bob other players' status icons in sync with own icon; keep seated depth correct
     const bob = Math.sin(this.time.now / 300) * 2;
     Object.values(this.otherPlayers).forEach(op => {
       if (op.statusIcon?.visible) {
         op.statusIcon.setPosition(op.data.x, op.data.y - 58 + bob).setDepth(op.data.y + 30);
+      }
+      if (op.data._sitSide && op.data._sitSide !== 'north') {
+        op.sprite.setDepth(op.data.y + 60);
+      }
+      if (op._bookOverlay?.active) {
+        if (op.data._sitSide === 'south') {
+          op._bookOverlay.setPosition(op.data.x, op.data.y).setDepth(op.data.y + 61);
+        } else {
+          op._bookOverlay.destroy(); op._bookOverlay = null;
+        }
       }
     });
   }
@@ -1240,7 +1251,7 @@ class GameScene extends Phaser.Scene {
       strokeThickness: 3,
       backgroundColor: '#2a1040cc',
       padding: { x: 4, y: 2 },
-    }).setOrigin(0.5, 1).setVisible(false); // name tag hidden
+    }).setOrigin(0.5, 1).setVisible(true);
 
     // Permanent faint glow to show which avatar is YOU
     this._selfGlow = this.add.graphics();
@@ -1256,8 +1267,8 @@ class GameScene extends Phaser.Scene {
       new Phaser.Geom.Rectangle(-18, -48, 36, 48),
       Phaser.Geom.Rectangle.Contains
     );
-    this.player.on('pointerover',  () => { this.hoverHighlight.setVisible(true);  this.nameTag.setVisible(true);  });
-    this.player.on('pointerout',   () => { this.hoverHighlight.setVisible(false); this.nameTag.setVisible(false); });
+    this.player.on('pointerover',  () => { this.hoverHighlight.setVisible(true); });
+    this.player.on('pointerout',   () => { this.hoverHighlight.setVisible(false); });
 
     this.statusIcon = this.add.sprite(0, 0, 'player_read_front_0')
       .setVisible(false).setOrigin(0.5, 1).setScale(0.55);
@@ -1362,7 +1373,7 @@ class GameScene extends Phaser.Scene {
 
   // Map icon type string → texture key (shared by own + other players)
   static _iconTexKey(type) {
-    if (type === 'focus')        return 'icon_book';
+    if (type === 'focus')        return 'double_books';
     if (type === 'break')        return 'icon_coffee';
     if (type === 'pause')        return 'icon_pause';
     if (type === 'eating')       return 'icon_fork';
@@ -1596,7 +1607,7 @@ class GameScene extends Phaser.Scene {
     chair.occupied    = true;
     this.isSitting    = true;
     this.currentChair = chair;
-    window.socket?.emit('sitDown', { chairId: chair.id });
+    window.socket?.emit('sitDown', { chairId: chair.id, side: chair.side });
 
     SoundManager.play('sit');
     this.player.body.setVelocity(0, 0);
@@ -1633,25 +1644,21 @@ class GameScene extends Phaser.Scene {
             ease: 'Sine.easeInOut',
           });
         } else if (chair.side === 'south') {
-          // Player faces south (visible to viewer) — front-facing body + animated book overlay
+          // Player faces south — static front body + animated book overlay
           this.player.anims.stop();
           this.player.setTexture('player_walk_front_0');
           this.player.setFlipX(false);
           if (this._sitBobTween) this._sitBobTween.stop();
           this._sitBobTween = this.tweens.add({
-            targets: this.player,
-            y: this.player.y - 2,
+            targets:  this.player,
+            y:        this.player.y - 2,
             duration: 700,
-            yoyo: true,
-            repeat: -1,
-            ease: 'Sine.easeInOut',
+            yoyo:     true,
+            repeat:   -1,
+            ease:     'Sine.easeInOut',
           });
-          // Book-flip overlay: plays read_front animation on top of the front-facing body
           if (this._sitBookOverlay) { this._sitBookOverlay.destroy(); this._sitBookOverlay = null; }
-          this._sitBookOverlay = this.add.sprite(this.player.x, this.player.y, 'player_read_front_0')
-            .setOrigin(0.5, 0.5)
-            .setDepth(this.player.depth + 1);
-          this._sitBookOverlay.play('read_front', true);
+          this._sitBookOverlay = this._makeBookOverlay(this.player.x, this.player.y, this.player.depth + 1);
         } else {
           this.player.play('sit_breathe_right', true);
           this.player.setFlipX(chair.side === 'west');
@@ -3229,12 +3236,50 @@ class GameScene extends Phaser.Scene {
 
   // ── Social / Multiplayer methods ──────────────────────────────────────────
 
+  _setOtherPlayerSitPose(id, side) {
+    const op = this.otherPlayers[id];
+    if (!op) return;
+    const prefix = op.data._texPrefix;
+    if (!prefix) return;
+    op.sprite.anims.stop();
+    if (side === 'north') {
+      op.sprite.setTexture(`${prefix}_up_0`).setFlipX(false);
+      op.sprite.setDepth(op.data.y);
+      if (op._bookOverlay) { op._bookOverlay.destroy(); op._bookOverlay = null; }
+    } else if (side === 'south') {
+      op.sprite.setTexture(`${prefix}_front_still`).setFlipX(false);
+      op.sprite.setDepth(op.data.y + 60);
+      if (op._bookOverlay) { op._bookOverlay.destroy(); op._bookOverlay = null; }
+      op._bookOverlay = this._makeBookOverlay(op.data.x, op.data.y, op.data.y + 61);
+    } else if (side === 'east') {
+      op.sprite.setTexture(`${prefix}_sit_side`).setFlipX(false);
+      op.sprite.setDepth(op.data.y + 60);
+    } else if (side === 'west') {
+      op.sprite.setTexture(`${prefix}_sit_side`).setFlipX(true);
+      op.sprite.setDepth(op.data.y + 60);
+    }
+    op.data._sitSide = side;
+  }
+
+  _clearOtherPlayerSitPose(id) {
+    const op = this.otherPlayers[id];
+    if (!op) return;
+    const prefix = op.data._texPrefix;
+    if (!prefix) return;
+    op.sprite.anims.stop();
+    op.sprite.setTexture(`${prefix}_idle`).setFlipX(false);
+    op.sprite.setDepth(op.data.y);
+    if (op._bookOverlay) { op._bookOverlay.destroy(); op._bookOverlay = null; }
+    delete op.data._sitSide;
+  }
+
   _spawnOtherPlayer(data) {
     // data = { id, name, gender, shirtColor, x, y, chatPreference, charNum }
     if (this.otherPlayers[data.id]) return;
     const nn = data.charNum || '01';
     const prefix = window.PixelSprites.ensureCharTextures(this, nn);
     data._texPrefix = prefix;
+    this._ensureCharAnims(prefix);
     const texKey = `${prefix}_idle`;
     const sprite = this.add.sprite(data.x, data.y, texKey)
       .setOrigin(0.5, 1).setDepth(data.y);
@@ -3257,13 +3302,122 @@ class GameScene extends Phaser.Scene {
 
     this.otherPlayers[data.id] = { sprite, nameTag, chatBubble: null, statusIcon, data };
 
+    // Apply sit pose if they were already seated when we joined
+    if (data.chairSide) this._setOtherPlayerSitPose(data.id, data.chairSide);
+
     // Show existing icon if they already had one when we joined
     if (data.statusIcon) this._setOtherStatusIcon(data.id, data.statusIcon);
+  }
+
+  _ensureBookTextures() {
+    if (this.textures.exists('book_frame_0')) return;
+    const W = 28, H = 18, FRAMES = 6;
+    for (let i = 0; i < FRAMES; i++) {
+      const g = this.make.graphics({ add: false });
+      // left page
+      g.fillStyle(0xf5e6c8, 1); g.fillRect(0, 0, 12, H);
+      g.fillStyle(0xb09050, 0.5);
+      for (let l = 3; l < H - 2; l += 3) g.fillRect(1, l, 9, 1);
+      // spine
+      g.fillStyle(0x7a5230, 1); g.fillRect(12, 0, 4, H);
+      // right page: cosine flip 1→-1→1
+      const phase = (i / (FRAMES - 1)) * Math.PI;
+      const pageScale = Math.cos(phase);
+      const pageW = Math.round(Math.abs(pageScale) * 12);
+      if (pageW > 0) {
+        const pageX = pageScale >= 0 ? 16 : 16 + (12 - pageW);
+        g.fillStyle(0xfaf0d8, 1); g.fillRect(pageX, 0, pageW, H);
+        g.fillStyle(0xb09050, 0.5);
+        for (let l = 3; l < H - 2; l += 3) {
+          const lw = Math.max(0, pageW - 2);
+          if (lw > 0) g.fillRect(pageX + 1, l, lw, 1);
+        }
+      }
+      g.generateTexture(`book_frame_${i}`, W, H);
+      g.destroy();
+    }
+    this.anims.create({
+      key: 'book_flip',
+      frames: Array.from({ length: FRAMES }, (_, i) => ({ key: `book_frame_${i}` })),
+      frameRate: 5, repeat: -1, yoyo: true,
+    });
+  }
+
+  _makeBookOverlay(x, y, depth) {
+    this._ensureBookTextures();
+    const sp = this.add.sprite(x, y, 'book_frame_0').setOrigin(0.5, 1).setDepth(depth);
+    sp.play('book_flip');
+    return sp;
+  }
+
+  _ensureCharAnims(prefix) {
+    if (this.anims.exists(`${prefix}_walk_right`)) return;
+    const fps = 8;
+    this.anims.create({
+      key: `${prefix}_walk_right`,
+      frames: [
+        { key: `${prefix}_walk_0` }, { key: `${prefix}_walk_1` },
+        { key: `${prefix}_walk_2` }, { key: `${prefix}_walk_3` },
+      ],
+      frameRate: fps, repeat: -1,
+    });
+    this.anims.create({
+      key: `${prefix}_walk_down`,
+      frames: [
+        { key: `${prefix}_walk_front_0` }, { key: `${prefix}_walk_front_1` },
+        { key: `${prefix}_walk_front_2` }, { key: `${prefix}_walk_front_3` },
+      ],
+      frameRate: fps, repeat: -1,
+    });
+    this.anims.create({
+      key: `${prefix}_walk_up`,
+      frames: [
+        { key: `${prefix}_walk_back_0` }, { key: `${prefix}_walk_back_1` },
+        { key: `${prefix}_walk_back_2` }, { key: `${prefix}_walk_back_3` },
+      ],
+      frameRate: fps, repeat: -1,
+    });
   }
 
   _moveOtherPlayer(id, x, y) {
     const op = this.otherPlayers[id];
     if (!op) return;
+
+    const dx = x - op.data.x;
+    const dy = y - op.data.y;
+    const moving = Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5;
+    const prefix = op.data._texPrefix;
+
+    if (moving && prefix && !op.data._sitSide) {
+      if (op._stopTimer) { clearTimeout(op._stopTimer); op._stopTimer = null; }
+
+      if (Math.abs(dx) >= Math.abs(dy)) {
+        op.sprite.play(`${prefix}_walk_right`, true);
+        op.sprite.setFlipX(dx < 0);
+        op.data._lastDir = dx < 0 ? 'left' : 'right';
+      } else if (dy < 0) {
+        op.sprite.play(`${prefix}_walk_up`, true);
+        op.sprite.setFlipX(false);
+        op.data._lastDir = 'up';
+      } else {
+        op.sprite.play(`${prefix}_walk_down`, true);
+        op.sprite.setFlipX(false);
+        op.data._lastDir = 'down';
+      }
+
+      op._stopTimer = setTimeout(() => {
+        if (!op.data._sitSide) {
+          op.sprite.anims.stop();
+          const dir = op.data._lastDir;
+          const idleTex = dir === 'up'   ? `${prefix}_up_0` :
+                          dir === 'down'  ? `${prefix}_walk_front_0` :
+                          `${prefix}_idle`;
+          op.sprite.setTexture(idleTex);
+        }
+        op._stopTimer = null;
+      }, 200);
+    }
+
     op.sprite.setPosition(x, y).setDepth(y);
     op.nameTag.setPosition(x, y - 72).setDepth(y + 35);
     if (op.chatBubble) op.chatBubble.setPosition(x, y - 72).setDepth(y + 36);
@@ -3279,6 +3433,7 @@ class GameScene extends Phaser.Scene {
     op.nameTag.destroy();
     if (op.chatBubble) op.chatBubble.destroy();
     if (op.statusIcon) op.statusIcon.destroy();
+    if (op._bookOverlay) op._bookOverlay.destroy();
     delete this.otherPlayers[id];
   }
 

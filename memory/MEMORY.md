@@ -30,6 +30,11 @@ The Game/
 - Player starts at (400, 460); collision body at feet (setSize 18×10, offset 7,28)
 - Desk collision: invisible rectangle with `physics.add.existing(rect, true)`
 
+## Versioning
+- Current version: **3.20** — increment by 0.01 after each completed change
+- Full history: [project_versions.md](project_versions.md)
+- See also: [feedback_version_updates.md](feedback_version_updates.md) — ALWAYS update index.html version badge
+
 ## Known Issues / Fixed
 - `createDecorations()` was called in `create()` but never defined → removed that call
 - Desk physics was using `staticGroup.create(null)` → fixed to `physics.add.existing`

@@ -55,7 +55,7 @@
         ov = document.createElement('div');
         ov.id = 'tab-conflict-overlay';
         ov.className = 'tab-conflict-overlay';
-        ov.innerHTML = '<div class="tab-conflict-box"><div class="tab-conflict-icon">🌷</div><p class="tab-conflict-msg">Cozy Corner is open in another window.</p><button id="tab-take-over-btn" class="pixel-btn">Refresh to use this window</button></div>';
+        ov.innerHTML = '<div class="tab-conflict-box"><div class="tab-conflict-icon">🌷</div><p class="tab-conflict-msg">Belong Here is open in another window.</p><button id="tab-take-over-btn" class="pixel-btn">Refresh to use this window</button></div>';
         document.body.appendChild(ov);
         document.getElementById('tab-take-over-btn')?.addEventListener('click', () => { _claimTab(); ov.remove(); });
       }
@@ -377,8 +377,14 @@
   });
 
   // Chair occupancy events from server
-  socket.on('chairTaken', ({ chairId }) => { window._takenChairs.add(chairId); });
-  socket.on('chairFreed', ({ chairId }) => { window._takenChairs.delete(chairId); });
+  socket.on('chairTaken', ({ chairId, playerId, side }) => {
+    window._takenChairs.add(chairId);
+    if (playerId && side && window.gameScene) window.gameScene._setOtherPlayerSitPose(playerId, side);
+  });
+  socket.on('chairFreed', ({ chairId, playerId }) => {
+    window._takenChairs.delete(chairId);
+    if (playerId && window.gameScene) window.gameScene._clearOtherPlayerSitPose(playerId);
+  });
   // Server rejected sit — auto-seat at nearest free sibling chair (same table)
   socket.on('sitRejected', ({ chairId }) => {
     window.gameScene?._tryAlternateSeat(chairId);

@@ -666,7 +666,7 @@ io.on('connection', (socket) => {
 
     socket.emit('existingPlayers', Object.values(rs.players)
       .filter(p => p.id !== socket.id)
-      .map(p => ({ id: p.id, name: p.name, gender: p.gender, shirtColor: p.shirtColor, charNum: p.charNum || '01', x: p.x, y: p.y, chatPreference: p.chatPreference, role: p.role || 'regular', statusIcon: p.statusIcon || null }))
+      .map(p => ({ id: p.id, name: p.name, gender: p.gender, shirtColor: p.shirtColor, charNum: p.charNum || '01', x: p.x, y: p.y, chatPreference: p.chatPreference, role: p.role || 'regular', statusIcon: p.statusIcon || null, chairSide: p.chairSide || null }))
     );
     socket.emit('spawnAt', { x: sx, y: sy });
     bcast('playerJoined', { id: socket.id, name: safeName, gender: safeGender, shirtColor: safeColor, charNum: safeCharNum, x: sx, y: sy, chatPreference: 'sociable', role, statusIcon: null });
@@ -885,18 +885,24 @@ io.on('connection', (socket) => {
   });
 
   // ── Chair sit / stand ─────────────────────────────────────
-  socket.on('sitDown', ({ chairId }) => {
-    const safeId = String(chairId).slice(0, 32);
+  socket.on('sitDown', ({ chairId, side }) => {
+    const safeId   = String(chairId).slice(0, 32);
+    const safeSide = ['north','south','east','west'].includes(side) ? side : null;
     const seats = R()?.seatOccupancy; if (!seats) return;
     if (seats[safeId] && seats[safeId] !== socket.id) { socket.emit('sitRejected', { chairId: safeId }); return; }
-    for (const [cid, sid] of Object.entries(seats)) { if (sid === socket.id) { delete seats[cid]; bcast('chairFreed', { chairId: cid }); break; } }
+    for (const [cid, sid] of Object.entries(seats)) { if (sid === socket.id) { delete seats[cid]; bcast('chairFreed', { chairId: cid, playerId: socket.id }); break; } }
     seats[safeId] = socket.id;
-    bcast('chairTaken', { chairId: safeId });
+    const p = me(); if (p) p.chairSide = safeSide;
+    bcast('chairTaken', { chairId: safeId, playerId: socket.id, side: safeSide });
   });
   socket.on('standUp', ({ chairId }) => {
     const safeId = String(chairId).slice(0, 32);
     const seats = R()?.seatOccupancy; if (!seats) return;
-    if (seats[safeId] === socket.id) { delete seats[safeId]; bcast('chairFreed', { chairId: safeId }); }
+    if (seats[safeId] === socket.id) {
+      delete seats[safeId];
+      const p = me(); if (p) p.chairSide = null;
+      bcast('chairFreed', { chairId: safeId, playerId: socket.id });
+    }
   });
 
   // ── Call signaling ────────────────────────────────────────
@@ -957,7 +963,7 @@ io.on('connection', (socket) => {
       else if (call.participants.length === 1) { io.to(call.participants[0]).emit('callEnded', { callId }); delete rs.activeCalls[callId]; }
     }
     for (const [cid, sid] of Object.entries(rs.seatOccupancy)) {
-      if (sid === socket.id) { delete rs.seatOccupancy[cid]; socket.to(socket.data.roomId).emit('chairFreed', { chairId: cid }); break; }
+      if (sid === socket.id) { delete rs.seatOccupancy[cid]; socket.to(socket.data.roomId).emit('chairFreed', { chairId: cid, playerId: socket.id }); break; }
     }
     socket.to(socket.data.roomId).emit('playerLeft', { id: socket.id });
     delete rs.players[socket.id];
