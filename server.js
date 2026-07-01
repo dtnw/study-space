@@ -643,11 +643,12 @@ ${_stats.twitchLogins.map(l => '  @' + l).join('\n') || '  (none yet)'}
 // ── Room creation ─────────────────────────────────────────────────────────────
 const ROOM_CREATE_CODE = 'SECRETVIP';
 app.post('/api/create-room', (req, res) => {
-  const { code, twitchLogin } = req.body || {};
+  const { code, twitchLogin, twitchDisplayName } = req.body || {};
   if (!code || !twitchLogin) return res.status(400).json({ error: 'Missing fields.' });
   const safeLogin = twitchLogin.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 25);
   if (!safeLogin) return res.status(400).json({ error: 'Invalid Twitch login.' });
   if (code.trim().toUpperCase() !== ROOM_CREATE_CODE) return res.status(403).json({ error: 'Invalid code.' });
+  const safeName = twitchDisplayName ? twitchDisplayName.replace(/[<>"'&]/g, '').slice(0, 30) : safeLogin;
   // Check if room already exists
   const existing = ROOM_CONFIGS.find(r => r.creatorLogin?.toLowerCase() === safeLogin);
   if (existing) {
@@ -657,7 +658,7 @@ app.post('/api/create-room', (req, res) => {
   const newRoom = {
     id: safeLogin,
     creatorLogin: safeLogin,
-    name: `${safeLogin}'s Space`,
+    name: `${safeName}'s Space`,
     path: '/' + safeLogin,
     theme: 'demo',
     createdAt: new Date().toISOString(),

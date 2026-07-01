@@ -32,6 +32,8 @@
     window.__ROOM_ID__      = username;
     window.__ROOM_THEME__   = THEME_MAP[username] || 'demo';
     window.__ROOM_CREATOR__ = username;
+    const displayName = username.charAt(0).toUpperCase() + username.slice(1);
+    document.title = `${displayName}'s Space — Belong Here 🌷`;
   })();
 
   const _tabChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('cc_game_tab') : null;

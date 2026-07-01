@@ -507,7 +507,7 @@ async function submitCreateRoom() {
     const res  = await fetch('/api/create-room', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code, twitchLogin: session.twitchLogin }),
+      body: JSON.stringify({ code, twitchLogin: session.twitchLogin, twitchDisplayName: session.name }),
     });
     const data = await res.json();
     if (data.ok) {
