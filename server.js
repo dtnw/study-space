@@ -11,7 +11,7 @@ const TWITCH_CONFIG_PATH = path.join(__dirname, 'data', 'twitch-config.json');
 const TWITCH_TOKEN_PATH  = path.join(__dirname, 'data', 'twitch-token.json');
 
 const ROOM_CONFIGS = [
-  { id: 'derbysaren',     creatorLogin: 'derbysaren',     name: "Derby's Study Space",   path: '/derbysaren', theme: 'demo'  },
+  { id: 'derbysaren',     creatorLogin: 'derbysaren',     name: "Derby's Study Space",   path: '/derbysaren', theme: 'study' },
   { id: 'demo',           creatorLogin: 'demo',           name: 'Demo Room',             path: '/demo',       theme: 'demo',  hidden: true },
   { id: 'derrizzmachine', creatorLogin: 'derrizzmachine', name: "DerRizzMachine's Café", path: '/derrizzmachine', theme: 'study', hidden: true },
 ];
