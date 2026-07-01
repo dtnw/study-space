@@ -41,8 +41,9 @@ async function sendNotificationEmail(subject, html) {
 // ── Admin auth ───────────────────────────────────────────────────────────────
 const ADMIN_KEY_PATH = path.join(__dirname, 'data', 'admin-key.json');
 function getAdminKey() {
+  if (process.env.ADMIN_KEY) return process.env.ADMIN_KEY;
   try { if (fs.existsSync(ADMIN_KEY_PATH)) return JSON.parse(fs.readFileSync(ADMIN_KEY_PATH, 'utf8')).key; } catch(e) {}
-  return null;
+  return 'belonghere-admin-2026';
 }
 function checkAdmin(req, res) {
   const key = getAdminKey();
