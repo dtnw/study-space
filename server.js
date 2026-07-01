@@ -4,6 +4,50 @@ const { Server } = require('socket.io');
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
+const nodemailer = require('nodemailer');
+
+// ── Email config ─────────────────────────────────────────────────────────────
+const EMAIL_CONFIG_PATH = path.join(__dirname, 'data', 'email-config.json');
+function loadEmailConfig() {
+  try { if (fs.existsSync(EMAIL_CONFIG_PATH)) return JSON.parse(fs.readFileSync(EMAIL_CONFIG_PATH, 'utf8')); } catch(e) {}
+  return {};
+}
+let _mailer = null;
+function getMailer() {
+  if (_mailer) return _mailer;
+  const cfg = loadEmailConfig();
+  if (!cfg.user || !cfg.pass) return null;
+  _mailer = nodemailer.createTransport({
+    host: cfg.host || 'smtp.gmail.com',
+    port: cfg.port || 587,
+    secure: false,
+    auth: { user: cfg.user, pass: cfg.pass },
+  });
+  return _mailer;
+}
+async function sendNotificationEmail(subject, html) {
+  const cfg = loadEmailConfig();
+  const mailer = getMailer();
+  if (!mailer || !cfg.to) return;
+  try {
+    await mailer.sendMail({ from: `"Belong Here" <${cfg.user}>`, to: cfg.to, subject, html });
+  } catch(e) { console.error('[email]', e.message); }
+}
+
+// ── Admin auth ───────────────────────────────────────────────────────────────
+const ADMIN_KEY_PATH = path.join(__dirname, 'data', 'admin-key.json');
+function getAdminKey() {
+  try { if (fs.existsSync(ADMIN_KEY_PATH)) return JSON.parse(fs.readFileSync(ADMIN_KEY_PATH, 'utf8')).key; } catch(e) {}
+  return null;
+}
+function checkAdmin(req, res) {
+  const key = getAdminKey();
+  const fromLocalhost = ['127.0.0.1','::1','::ffff:127.0.0.1'].includes(req.socket.remoteAddress);
+  if (fromLocalhost) return true;
+  if (key && req.query.key === key) return true;
+  res.status(403).send('Forbidden — add ?key=<admin-key> to the URL');
+  return false;
+}
 
 const app = express();
 const DATA_PATH  = path.join(__dirname, 'data', 'tasks.json');
@@ -549,12 +593,49 @@ app.post('/api/streamer-interest', (req, res) => {
   });
   saveStreamerInterest(list);
   res.json({ ok: true });
+  // Fire notification email (non-blocking)
+  const entry = list[list.length - 1];
+  sendNotificationEmail(
+    `🌷 New Interest — ${entry.name || entry.twitchHandle || entry.email}`,
+    `<pre style="font-family:monospace">
+Name:    ${entry.name || '—'}
+Email:   ${entry.email || '—'}
+Twitch:  ${entry.twitchHandle ? '@' + entry.twitchHandle : '—'}
+Space for: ${entry.spaceFor || '—'}
+Message: ${entry.message || '—'}
+Time:    ${entry.submittedAt}
+    </pre>`
+  );
 });
 
 app.get('/admin/streamer-interest', (req, res) => {
-  const ip = req.socket.remoteAddress;
-  if (!['127.0.0.1','::1','::ffff:127.0.0.1'].includes(ip)) return res.status(403).send('Forbidden');
-  res.json(loadStreamerInterest());
+  if (!checkAdmin(req, res)) return;
+  const list = loadStreamerInterest();
+  const rows = list.map(e => `
+    <tr>
+      <td>${e.submittedAt?.slice(0,10) || '—'}</td>
+      <td>${e.name || '—'}</td>
+      <td>${e.email ? `<a href="mailto:${e.email}">${e.email}</a>` : '—'}</td>
+      <td>${e.twitchHandle ? `@${e.twitchHandle}` : '—'}</td>
+      <td>${e.spaceFor || '—'}</td>
+      <td>${e.message || '—'}</td>
+    </tr>`).join('');
+  res.send(`<!DOCTYPE html><html><head><style>
+    body{font-family:monospace;background:#0a0a14;color:#e8e0d0;padding:24px}
+    h2{color:#f9c4d2}
+    table{border-collapse:collapse;width:100%}
+    th,td{text-align:left;padding:8px 12px;border-bottom:1px solid #333}
+    th{background:#1a1a2e;color:#f9c4d2}
+    a{color:#f9c4d2}
+    .count{opacity:.6;margin-bottom:16px}
+  </style></head><body>
+  <h2>🌷 Interest Registrations (${list.length})</h2>
+  <p class="count">${list.length} entr${list.length === 1 ? 'y' : 'ies'}</p>
+  <table>
+    <tr><th>Date</th><th>Name</th><th>Email</th><th>Twitch</th><th>Space for</th><th>Message</th></tr>
+    ${rows || '<tr><td colspan="6">No entries yet</td></tr>'}
+  </table>
+  </body></html>`);
 });
 
 app.post('/api/creator-codes/validate', (req, res) => {
@@ -568,8 +649,7 @@ app.post('/api/creator-codes/validate', (req, res) => {
   res.json({ valid: true });
 });
 app.get('/admin/generate-code', (req, res) => {
-  const ip = req.socket.remoteAddress;
-  if (!['127.0.0.1','::1','::ffff:127.0.0.1'].includes(ip)) return res.status(403).send('Forbidden');
+  if (!checkAdmin(req, res)) return;
   const code = 'CC-' + Math.random().toString(36).slice(2, 8).toUpperCase();
   const codes = loadCreatorCodes();
   codes.push({ code, used: false, usedBy: null, createdAt: new Date().toISOString() });
@@ -589,15 +669,21 @@ function saveFeedback(list) {
 
 app.post('/api/feedback', (req, res) => {
   const VALID = ['player', 'streamer', 'maybe', 'not-for-me'];
+  const LABELS = { player: '🎮 Yes, as a player', streamer: '🎙️ Yes, as a streamer', maybe: '🤔 Maybe', 'not-for-me': '💜 Not for me' };
   const { choice, roomId } = req.body || {};
   if (!VALID.includes(choice)) return res.status(400).json({ ok: false });
   const list = loadFeedback();
   list.push({ choice, roomId: roomId || null, at: new Date().toISOString() });
   saveFeedback(list);
   res.json({ ok: true });
+  sendNotificationEmail(
+    `💬 Feedback — ${LABELS[choice] || choice}`,
+    `<pre style="font-family:monospace">Choice: ${LABELS[choice] || choice}\nRoom:   ${roomId || '—'}\nTime:   ${new Date().toISOString()}\nTotal responses so far: ${list.length}</pre>`
+  );
 });
 
 app.get('/admin/feedback', (req, res) => {
+  if (!checkAdmin(req, res)) return;
   const list = loadFeedback();
   const counts = { player: 0, streamer: 0, maybe: 0, 'not-for-me': 0 };
   list.forEach(e => { if (counts[e.choice] !== undefined) counts[e.choice]++; });
