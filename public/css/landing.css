@@ -28,7 +28,7 @@ body { min-height: 100%; background: var(--bg); color: var(--text); font-family:
   background: var(--accent);
   color: #0a0a14;
   font-family: var(--font);
-  font-size: 8px;
+  font-size: 14px;
   letter-spacing: 2px;
   border-radius: 3px;
 }
@@ -63,7 +63,7 @@ body { min-height: 100%; background: var(--bg); color: var(--text); font-family:
 }
 .lp-nav-link {
   font-family: var(--font);
-  font-size: 8px;
+  font-size: 14px;
   color: #9b6bdb;
   text-decoration: none;
   padding: 6px 10px;
@@ -121,7 +121,7 @@ body { min-height: 100%; background: var(--bg); color: var(--text); font-family:
   border: 1px solid var(--border);
   border-radius: 99px;
   padding: 7px 14px;
-  font-size: 7px;
+  font-size: 14px;
   color: var(--dim);
   transition: border-color 0.2s, color 0.2s;
 }
@@ -136,13 +136,13 @@ body { min-height: 100%; background: var(--bg); color: var(--text); font-family:
 }
 .lp-section-title-text {
   font-family: var(--font);
-  font-size: 12px;
+  font-size: 14px;
   color: var(--text);
 }
 .live-count-badge {
   background: var(--green);
   color: #000;
-  font-size: 7px;
+  font-size: 14px;
   padding: 4px 8px;
   border-radius: 99px;
   animation: pulseBadge 1.5s infinite;
@@ -227,7 +227,7 @@ body { min-height: 100%; background: var(--bg); color: var(--text); font-family:
   top: 10px;
   right: 10px;
   font-family: var(--font);
-  font-size: 7px;
+  font-size: 14px;
   padding: 4px 8px;
   border-radius: 4px;
   z-index: 2;
@@ -240,7 +240,7 @@ body { min-height: 100%; background: var(--bg); color: var(--text); font-family:
   top: 10px;
   left: 10px;
   font-family: var(--font);
-  font-size: 7px;
+  font-size: 14px;
   color: #fff;
   background: rgba(0,0,0,0.6);
   padding: 3px 7px;
@@ -263,11 +263,11 @@ body { min-height: 100%; background: var(--bg); color: var(--text); font-family:
   line-height: 1.6;
 }
 .room-card-streamer {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--accent);
 }
 .room-card-stream-title {
-  font-size: 12px;
+  font-size: 14px;
   color: #aaa;
   line-height: 1.6;
   word-break: break-word;
@@ -277,11 +277,11 @@ body { min-height: 100%; background: var(--bg); color: var(--text); font-family:
   overflow: hidden;
 }
 .room-card-game {
-  font-size: 6px;
+  font-size: 14px;
   color: var(--dim);
 }
 .room-card-players {
-  font-size: 7px;
+  font-size: 14px;
   color: var(--dim);
   margin-top: auto;
   padding-top: 6px;
@@ -295,7 +295,7 @@ body { min-height: 100%; background: var(--bg); color: var(--text); font-family:
   margin-top: 12px;
   padding: 10px;
   font-family: var(--font);
-  font-size: 8px;
+  font-size: 14px;
   color: #fff;
   border: none;
   border-radius: var(--radius);
@@ -313,7 +313,7 @@ body { min-height: 100%; background: var(--bg); color: var(--text); font-family:
   grid-column: 1 / -1;
   text-align: center;
   padding: 48px;
-  font-size: 8px;
+  font-size: 14px;
   color: var(--dim);
   line-height: 2.5;
   border: 1px dashed var(--border);
@@ -343,12 +343,12 @@ body { min-height: 100%; background: var(--bg); color: var(--text); font-family:
 }
 .lp-step-title {
   font-family: var(--font);
-  font-size: 8px;
+  font-size: 14px;
   color: var(--text);
   margin-bottom: 10px;
 }
 .lp-step-desc {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--dim);
   line-height: 1.6;
 }
@@ -360,14 +360,14 @@ body { min-height: 100%; background: var(--bg); color: var(--text); font-family:
   text-align: center;
   padding: 20px;
   border-top: 1px solid var(--border);
-  font-size: 7px;
+  font-size: 14px;
   color: var(--dim);
 }
 
 /* ── Responsive ────────────────────────────────── */
 @media (max-width: 600px) {
   .lp-header { padding: 10px 16px; }
-  .lp-logo { font-size: 10px; }
+  .lp-logo { font-size: 14px; }
   .lp-title { font-size: 16px; }
   .lp-main { padding: 0 16px 48px; }
 }
@@ -388,7 +388,7 @@ body { min-height: 100%; background: var(--bg); color: var(--text); font-family:
   background: rgba(255,60,60,0.12);
   border: 1px solid #c04;
   color: #f88;
-  font-size: 8px;
+  font-size: 14px;
   padding: 10px 16px;
   border-radius: 4px;
   margin-bottom: 20px;
@@ -400,7 +400,7 @@ body { min-height: 100%; background: var(--bg); color: var(--text); font-family:
 .lp-creator-section { text-align: center; padding: 40px 20px 56px; }
 .lp-creator-badge {
   display: inline-block;
-  font-size: 7px;
+  font-size: 14px;
   background: rgba(147,81,234,0.18);
   border: 1px solid var(--accent);
   color: var(--accent);
@@ -420,7 +420,7 @@ body { min-height: 100%; background: var(--bg); color: var(--text); font-family:
 }
 .lp-creator-perks li { font-size: 14px; color: var(--dim); line-height: 1.7; padding-left: 4px; }
 .lp-creator-actions { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; margin-top: 8px; }
-.lp-creator-btn { font-size: 9px; padding: 12px 28px; background: var(--accent); color: #fff; border: none; cursor: pointer; }
+.lp-creator-btn { font-size: 14px; padding: 12px 28px; background: var(--accent); color: #fff; border: none; cursor: pointer; }
 .lp-creator-btn:hover { background: #b060e8; }
 .lp-create-room-btn { background: var(--accent2); color: #0a0a14; }
 .lp-create-room-btn:hover { background: #5aa0d8; }
@@ -443,9 +443,9 @@ body { min-height: 100%; background: var(--bg); color: var(--text); font-family:
   max-width: 420px; width: 100%;
   text-align: left;
 }
-.lp-modal-title { font-size: 12px; color: var(--text); margin-bottom: 10px; text-align: center; }
-.lp-modal-sub { font-size: 8px; color: var(--dim); margin-bottom: 20px; line-height: 2; text-align: center; }
-.lp-modal-label { display: block; font-size: 7px; color: var(--dim); margin-bottom: 5px; margin-top: 10px; letter-spacing: 1px; text-transform: uppercase; }
+.lp-modal-title { font-size: 14px; color: var(--text); margin-bottom: 10px; text-align: center; }
+.lp-modal-sub { font-size: 14px; color: var(--dim); margin-bottom: 20px; line-height: 2; text-align: center; }
+.lp-modal-label { display: block; font-size: 14px; color: var(--dim); margin-bottom: 5px; margin-top: 10px; letter-spacing: 1px; text-transform: uppercase; }
 .lp-modal-label:first-of-type { margin-top: 0; }
 .lp-modal-required { color: var(--accent); }
 .lp-modal-optional { opacity: 0.5; }
@@ -453,7 +453,7 @@ body { min-height: 100%; background: var(--bg); color: var(--text); font-family:
   width: 100%;
   box-sizing: border-box;
   font-family: var(--font);
-  font-size: 9px;
+  font-size: 14px;
   background: #1a1a2e;
   border: 1px solid var(--border);
   color: var(--text);
@@ -466,7 +466,7 @@ body { min-height: 100%; background: var(--bg); color: var(--text); font-family:
 .lp-radio-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px; }
 .lp-radio-option {
   display: flex; align-items: center; gap: 10px;
-  font-size: 8px; color: var(--dim); cursor: pointer;
+  font-size: 14px; color: var(--dim); cursor: pointer;
   padding: 8px 12px;
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -476,12 +476,12 @@ body { min-height: 100%; background: var(--bg); color: var(--text); font-family:
 .lp-radio-option input[type="radio"] { accent-color: var(--accent); width: 14px; height: 14px; flex-shrink: 0; cursor: pointer; }
 .lp-radio-option:has(input:checked) { border-color: var(--accent); color: var(--text); background: rgba(147,81,234,0.1); }
 .lp-modal-input:focus { border-color: var(--accent); }
-.lp-modal-error { font-size: 7px; color: var(--red); min-height: 16px; margin: 6px 0 0; }
-.lp-modal-success { font-size: 8px; color: #4ade80; line-height: 2; margin: 10px 0; text-align: center; }
+.lp-modal-error { font-size: 14px; color: var(--red); min-height: 16px; margin: 6px 0 0; }
+.lp-modal-success { font-size: 14px; color: #4ade80; line-height: 2; margin: 10px 0; text-align: center; }
 .lp-modal-actions { display: flex; gap: 10px; justify-content: center; margin-top: 16px; }
 .lp-pixel-btn {
   font-family: var(--font);
-  font-size: 8px;
+  font-size: 14px;
   padding: 8px 16px;
   border: 2px solid var(--border);
   background: var(--panel);
@@ -503,7 +503,7 @@ body { min-height: 100%; background: var(--bg); color: var(--text); font-family:
 }
 .lp-twitch-signin-btn {
   font-family: var(--font);
-  font-size: 9px;
+  font-size: 14px;
   background: #9146FF;
   color: #fff;
   text-decoration: none;
@@ -514,7 +514,7 @@ body { min-height: 100%; background: var(--bg); color: var(--text); font-family:
 .lp-twitch-signin-btn:hover { background: #7d3ae8; }
 .lp-guest-link {
   font-family: var(--font);
-  font-size: 7px;
+  font-size: 14px;
   color: var(--dim);
   text-decoration: none;
 }
@@ -523,7 +523,7 @@ body { min-height: 100%; background: var(--bg); color: var(--text); font-family:
 /* ── Google sign-in button ───────────────────────────────── */
 .lp-google-signin-btn {
   font-family: var(--font);
-  font-size: 9px;
+  font-size: 14px;
   background: #4285F4;
   color: #fff;
   text-decoration: none;
@@ -555,12 +555,12 @@ body { min-height: 100%; background: var(--bg); color: var(--text); font-family:
 }
 .lp-user-name {
   font-family: var(--font);
-  font-size: 8px;
+  font-size: 14px;
   color: var(--text);
 }
 .lp-signout-btn {
   font-family: var(--font);
-  font-size: 7px;
+  font-size: 14px;
   background: none;
   border: 1px solid var(--border);
   color: var(--dim);
@@ -584,7 +584,7 @@ body { min-height: 100%; background: var(--bg); color: var(--text); font-family:
 .lp-name-input {
   width: 100%;
   font-family: var(--font);
-  font-size: 9px;
+  font-size: 14px;
   background: #0d0d1a;
   border: 2px solid var(--border);
   color: var(--text);
@@ -606,7 +606,7 @@ body { min-height: 100%; background: var(--bg); color: var(--text); font-family:
 }
 .lp-gender-btn {
   font-family: var(--font);
-  font-size: 8px;
+  font-size: 14px;
   background: #1a1a2e;
   border: 2px solid var(--border);
   color: var(--dim);
