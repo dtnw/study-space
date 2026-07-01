@@ -839,7 +839,11 @@
     diyCreatorOn = false;
     diyToggleBtn?.classList.remove('active');
     diyPanel?.classList.add('hidden');
-    window.gameScene?.exitCreatorMode();
+    if (window.myRole !== 'creator') {
+      document.getElementById('diy-guest-exit-popup')?.classList.remove('hidden');
+    } else {
+      window.gameScene?.exitCreatorMode();
+    }
   });
 
   // Section tabs (Furniture / Decoration)

@@ -6,8 +6,8 @@
   <title>Derby's Study Space — Belong Here 🌷</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="css/style.css?v=3.41" />
-  <link rel="stylesheet" href="css/landing.css?v=3.41" />
+  <link rel="stylesheet" href="css/style.css?v=3.42" />
+  <link rel="stylesheet" href="css/landing.css?v=3.42" />
 </head>
 <body>
 
@@ -33,7 +33,7 @@
         <button id="stop-timer-btn"  class="pixel-btn small danger">■</button>
       </div>
       <div id="header-right">
-        <span id="coin-count" class="coin-count">🪙 0</span> <span style="font-size: 14px;opacity:0.5;font-family:monospace">v3.41</span>
+        <span id="coin-count" class="coin-count">🪙 0</span> <span style="font-size: 14px;opacity:0.5;font-family:monospace">v3.42</span>
         <div class="status-block">
           <span id="status-indicator" class="status-idle">● IDLE</span>
           <div class="audio-btns">
@@ -574,6 +574,17 @@
       <button id="call-video-btn" class="pixel-btn small icon-btn" title="Toggle camera">📷 (off)</button>
       <button id="call-leave-btn" class="pixel-btn small danger"   title="Leave call">📵 Leave</button>
     </div>
+  </div>
+
+  <!-- ── Guest DIY exit popup ─────────────────────────────── -->
+  <div id="diy-guest-exit-popup" class="hidden">
+    <button class="fb-close" onclick="document.getElementById('diy-guest-exit-popup').classList.add('hidden');window.gameScene?.exitCreatorMode();" title="Close">✕</button>
+    <div class="fb-emoji">🛋️</div>
+    <div class="diy-guest-title">your changes won't be saved</div>
+    <div class="diy-guest-msg">since you're not the owner of this room, the layout is just for fun on your screen and won't affect anyone else's view.</div>
+    <div class="diy-guest-msg" style="margin-top:10px;">want to create <strong>your own space</strong> and fully customise it?</div>
+    <a href="/?showInterest=1" target="_blank" class="pixel-btn diy-guest-interest-btn">✨ register your interest</a>
+    <button class="pixel-btn small diy-guest-ok-btn" onclick="document.getElementById('diy-guest-exit-popup').classList.add('hidden');window.gameScene?.exitCreatorMode();">got it, exit anyway</button>
   </div>
 
   <!-- ── Feedback popup ───────────────────────────────────── -->

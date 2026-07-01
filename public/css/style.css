@@ -1710,3 +1710,48 @@ body:has(.modal-overlay.active) #game-container canvas { pointer-events: none; }
   padding: 2px 5px;
 }
 .fb-close:hover { color: var(--text); }
+
+/* ── Guest DIY exit popup ──────────────────────────────────── */
+#diy-guest-exit-popup {
+  position: fixed;
+  bottom: 24px; right: 24px;
+  width: 300px;
+  background: var(--panel);
+  border: 2px solid var(--accent);
+  border-radius: 10px;
+  padding: 24px 20px 18px;
+  z-index: 9999;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+  animation: feedbackSlideIn 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+#diy-guest-exit-popup.hidden { display: none; }
+.diy-guest-title {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 14px;
+  color: var(--accent);
+  line-height: 1.6;
+}
+.diy-guest-msg {
+  font-size: 14px;
+  color: var(--text);
+  line-height: 1.7;
+}
+.diy-guest-interest-btn {
+  display: block;
+  text-align: center;
+  text-decoration: none;
+  margin-top: 4px;
+  padding: 10px 14px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 14px;
+}
+.diy-guest-ok-btn {
+  width: 100%;
+  margin-top: 2px;
+  opacity: 0.7;
+  font-size: 14px;
+}

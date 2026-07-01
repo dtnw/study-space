@@ -393,6 +393,10 @@ loadSpaces();
 
 (function() {
   const _p = new URLSearchParams(location.search);
+  if (_p.get('showInterest') === '1') {
+    history.replaceState({}, '', '/');
+    setTimeout(() => openCreatorModal(), 400);
+  }
   if (_p.get('msg') === 'offline') {
     const banner = document.createElement('div');
     banner.className = 'lp-offline-banner';
