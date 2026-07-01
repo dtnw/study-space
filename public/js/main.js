@@ -27,7 +27,7 @@
   // The URL path IS the creator's username (e.g. /derbysaren → roomId 'derbysaren').
   // Theme overrides for known rooms; everything else defaults to 'study'.
   (function _detectRoom() {
-    const THEME_MAP = { derbysaren: 'study', derrizzmachine: 'cafe', demo: 'demo' };
+    const THEME_MAP = { derbysaren: 'demo', derrizzmachine: 'cafe', demo: 'demo' };
     const username = window.location.pathname.replace(/^\/+/, '').toLowerCase().split('/')[0] || 'derbysaren';
     window.__ROOM_ID__      = username;
     window.__ROOM_THEME__   = THEME_MAP[username] || 'study';
