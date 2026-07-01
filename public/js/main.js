@@ -318,10 +318,9 @@
     document.getElementById('clear-tasks-btn')?.classList.toggle('hidden', effectiveRole === 'regular');
     if (effectiveRole !== 'regular') window.socket?.emit('getBannedList');
     window._refreshSpacesPanel?.();
-    // DIY panel only visible to the room creator
-    const isCreator = effectiveRole === 'creator';
-    document.getElementById('diy-creator-toggle')?.classList.toggle('hidden', !isCreator);
-    document.getElementById('diy-wip-label')?.classList.toggle('hidden', !isCreator);
+    // DIY panel is visible to everyone — non-creators can play locally but saves are blocked
+    document.getElementById('diy-creator-toggle')?.classList.remove('hidden');
+    document.getElementById('diy-wip-label')?.classList.remove('hidden');
   });
 
   socket.on('playerRoleUpdated', ({ id, role }) => {
