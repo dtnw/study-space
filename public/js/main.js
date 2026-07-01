@@ -117,6 +117,33 @@
   window.socket = socket;
   window.CallManager?.wireSocketEvents();
 
+  // ── Reconnect recovery ─────────────────────────────────────
+  // Socket.IO fires 'connect' on initial connect AND after every reconnect.
+  // On reconnect the server has dropped the old socket, so we must re-register
+  // and clear stale other-player sprites so the fresh existingPlayers list is used.
+  let _initialConnect = true;
+  socket.on('connect', () => {
+    if (_initialConnect) { _initialConnect = false; return; }
+    // Reconnected — server no longer knows we exist. Re-register if already in game.
+    const payload = window._lastJoinPayload;
+    if (!payload) return;
+    // Clear stale other-player sprites
+    const gs = window.gameScene;
+    if (gs) {
+      Object.keys(gs.otherPlayers || {}).forEach(id => gs._removeOtherPlayer(id));
+    }
+    window._allPlayers = {};
+    window._pendingPlayers = [];
+    // Re-join with current position
+    const p = gs?.player;
+    socket.emit('playerJoin', {
+      name: payload.name, gender: 'auto', shirtColor: 'auto',
+      charNum: payload.charNum, clientId: payload.clientId,
+      twitchLogin: payload.twitchLogin, roomId: payload.roomId,
+      startX: p?.x, startY: p?.y,
+    });
+  });
+
   socket.on('spaceStatus', (status) => {
     window._spaceStatus = status;
     window._updateSpacePanel?.(status);
@@ -505,6 +532,9 @@
     const _twitchLogin = window._ccSession?.twitchLogin || null;
     const charNum = window.PixelSprites?.getOrAssignCharNum() || '01';
     socket.emit('playerJoin', { name, gender: 'auto', shirtColor: 'auto', charNum, clientId: window._clientId, twitchLogin: _twitchLogin, roomId: window.__ROOM_ID__, startX, startY });
+
+    // Store join payload so we can re-register after a socket reconnect
+    window._lastJoinPayload = { name, charNum, twitchLogin: _twitchLogin, roomId: window.__ROOM_ID__, clientId: window._clientId };
 
     nameModal.classList.remove('active');
     nameModal.classList.add('hidden');
