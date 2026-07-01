@@ -2226,8 +2226,8 @@ class GameScene extends Phaser.Scene {
   }
 
   _saveDIYLayout() {
+    if (window.myRole !== 'creator') return; // non-creators cannot save
     try { localStorage.setItem(this._diyStorageKey(), JSON.stringify(this.diyPlaced)); } catch (_) {}
-    // Sync to server so all players see the updated room
     window.socket?.emit('saveDIYLayout', { items: this.diyPlaced });
   }
 

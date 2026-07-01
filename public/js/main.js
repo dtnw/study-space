@@ -299,10 +299,6 @@
   });
 
   // ── Role events ───────────────────────────────────────────
-  // DIY button is always visible (server guards the actual save operations)
-  document.getElementById('diy-creator-toggle')?.classList.remove('hidden');
-  document.getElementById('diy-wip-label')?.classList.remove('hidden');
-
   socket.on('yourRole', ({ role }) => {
     // Client-side guard: guests and users whose twitchLogin isn't the owner
     // can never be creator, even if server somehow says so
@@ -310,7 +306,6 @@
     const _sess = window._ccSession;
     if (effectiveRole === 'creator') {
       const isGuest = !_sess || _sess.authType === 'guest';
-      // Accept either twitchLogin or googleEmail as the identity to compare
       const identity = (_sess?.twitchLogin || _sess?.googleEmail || '').toLowerCase().trim();
       const expectedCreator = (window.__ROOM_CREATOR__ || 'derbysaren').toLowerCase();
       if (isGuest || identity !== expectedCreator) {
@@ -323,9 +318,10 @@
     document.getElementById('clear-tasks-btn')?.classList.toggle('hidden', effectiveRole === 'regular');
     if (effectiveRole !== 'regular') window.socket?.emit('getBannedList');
     window._refreshSpacesPanel?.();
-    // DIY button always visible — server guards actual save operations
-    document.getElementById('diy-creator-toggle')?.classList.remove('hidden');
-    document.getElementById('diy-wip-label')?.classList.remove('hidden');
+    // DIY panel only visible to the room creator
+    const isCreator = effectiveRole === 'creator';
+    document.getElementById('diy-creator-toggle')?.classList.toggle('hidden', !isCreator);
+    document.getElementById('diy-wip-label')?.classList.toggle('hidden', !isCreator);
   });
 
   socket.on('playerRoleUpdated', ({ id, role }) => {
