@@ -34,6 +34,8 @@
     window.__ROOM_CREATOR__ = username;
     const displayName = username.charAt(0).toUpperCase() + username.slice(1);
     document.title = `${displayName}'s Space — Belong Here 🌷`;
+    const logoEl = document.getElementById('logo');
+    if (logoEl) logoEl.textContent = `🌷 ${displayName}'s Space`;
   })();
 
   const _tabChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('cc_game_tab') : null;
