@@ -175,6 +175,18 @@ if (globalTasks.length === 0) {
 }
 
 const playerSessions = new Map();   // token → { name, twitchLogin, profilePic, expiresAt }
+
+// ── Visitor stats ──────────────────────────────────────────────────────────────
+const STATS_PATH = path.join(__dirname, 'data', 'stats.json');
+function loadStats() {
+  try { if (fs.existsSync(STATS_PATH)) return JSON.parse(fs.readFileSync(STATS_PATH, 'utf8')); } catch(e) {}
+  return { twitchLogins: [], guestClientIds: [] };
+}
+function saveStats(s) {
+  try { fs.mkdirSync(path.dirname(STATS_PATH), { recursive: true }); fs.writeFileSync(STATS_PATH, JSON.stringify(s, null, 2)); } catch(e) {}
+}
+const _stats = loadStats();
+
 const CREATOR_CODES_PATH = path.join(__dirname, 'data', 'creator-codes.json');
 function loadCreatorCodes() {
   try { if (fs.existsSync(CREATOR_CODES_PATH)) return JSON.parse(fs.readFileSync(CREATOR_CODES_PATH, 'utf8')); } catch(e) {}
@@ -565,6 +577,26 @@ app.get('/admin/generate-code', (req, res) => {
   res.json({ code, note: 'Share this with your customer. It can only be used once.' });
 });
 
+app.get('/admin/stats', (req, res) => {
+  const twitchCount = _stats.twitchLogins.length;
+  const guestCount  = _stats.guestClientIds.length;
+  const currentlyOnline = [...roomState.values()].reduce((sum, rs) => sum + Object.keys(rs.players).length, 0);
+  res.send(`
+    <pre style="font-family:monospace;font-size:14px;padding:24px;background:#0a0a14;color:#e8e0d0;min-height:100vh">
+=== Belong Here — Visitor Stats ===
+
+Twitch sign-ins (unique):  ${twitchCount}
+Guests (unique devices):   ${guestCount}
+Total unique visitors:     ${twitchCount + guestCount}
+
+Currently online:          ${currentlyOnline}
+
+Twitch logins seen:
+${_stats.twitchLogins.map(l => '  @' + l).join('\n') || '  (none yet)'}
+    </pre>
+  `);
+});
+
 // ── Room creation ─────────────────────────────────────────────────────────────
 const ROOM_CREATE_CODE = 'SECRETVIP';
 app.post('/api/create-room', (req, res) => {
@@ -709,6 +741,19 @@ io.on('connection', (socket) => {
     const sy = (typeof startY === 'number' && startY >= 32 && startY <= 764)  ? Math.round(startY) : 560;
 
     rs.players[socket.id] = { id: socket.id, clientId: safeClientId || socket.id, name: safeName, gender: safeGender, shirtColor: safeColor, charNum: safeCharNum, x: sx, y: sy, chatPreference: 'sociable', role, friends: [], pendingFrom: [], pendingMessages: [] };
+
+    // Track unique visitors
+    if (safeTwitchLogin) {
+      if (!_stats.twitchLogins.includes(safeTwitchLogin)) {
+        _stats.twitchLogins.push(safeTwitchLogin);
+        saveStats(_stats);
+      }
+    } else if (safeClientId) {
+      if (!_stats.guestClientIds.includes(safeClientId)) {
+        _stats.guestClientIds.push(safeClientId);
+        saveStats(_stats);
+      }
+    }
 
     emitR('playerCount', Object.keys(rs.players).length);
     socket.emit('yourRole', { role });
