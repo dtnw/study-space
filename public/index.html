@@ -33,7 +33,7 @@
         <button id="stop-timer-btn"  class="pixel-btn small danger">■</button>
       </div>
       <div id="header-right">
-        <span id="coin-count" class="coin-count">🪙 0</span> <span style="font-size:9px;opacity:0.5;font-family:monospace">v3.37</span>
+        <span id="coin-count" class="coin-count">🪙 0</span> <span style="font-size:9px;opacity:0.5;font-family:monospace">v3.38</span>
         <div class="status-block">
           <span id="status-indicator" class="status-idle">● IDLE</span>
           <div class="audio-btns">
@@ -573,6 +573,25 @@
       <button id="call-mute-btn"  class="pixel-btn small icon-btn" title="Mute mic">🎤</button>
       <button id="call-video-btn" class="pixel-btn small icon-btn" title="Toggle camera">📷 (off)</button>
       <button id="call-leave-btn" class="pixel-btn small danger"   title="Leave call">📵 Leave</button>
+    </div>
+  </div>
+
+  <!-- ── Feedback popup ───────────────────────────────────── -->
+  <div id="feedback-popup" class="hidden">
+    <button class="fb-close" onclick="document.getElementById('feedback-popup').classList.add('hidden')" title="Close">✕</button>
+    <div id="fb-question">
+      <div class="fb-emoji">🌷</div>
+      <div class="fb-title">hey, quick question!</div>
+      <div class="fb-body">this is my very first ever project and i'd genuinely love to know — would you use <strong>Belong Here</strong>?</div>
+      <div class="fb-choices">
+        <button class="fb-choice" onclick="_submitFeedback('player')">🎮 Yes, as a player — I want to study with my fave streamers!</button>
+        <button class="fb-choice" onclick="_submitFeedback('streamer')">🎙️ Yes, as a streamer — I'd love to host my own cozy space!</button>
+        <button class="fb-choice" onclick="_submitFeedback('maybe')">🤔 Maybe — still exploring, ask me another time</button>
+        <button class="fb-choice" onclick="_submitFeedback('not-for-me')">💜 Not for me — but genuinely love the idea!</button>
+      </div>
+    </div>
+    <div id="fb-thankyou" class="fb-thankyou hidden">
+      thank you so much! 🌷<br/>it means the world 💜
     </div>
   </div>
 

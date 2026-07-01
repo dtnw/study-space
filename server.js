@@ -577,6 +577,49 @@ app.get('/admin/generate-code', (req, res) => {
   res.json({ code, note: 'Share this with your customer. It can only be used once.' });
 });
 
+// ── Feedback ──────────────────────────────────────────────────────────────────
+const FEEDBACK_PATH = path.join(__dirname, 'data', 'feedback.json');
+function loadFeedback() {
+  try { if (fs.existsSync(FEEDBACK_PATH)) return JSON.parse(fs.readFileSync(FEEDBACK_PATH, 'utf8')); } catch(e) {}
+  return [];
+}
+function saveFeedback(list) {
+  try { fs.mkdirSync(path.dirname(FEEDBACK_PATH), { recursive: true }); fs.writeFileSync(FEEDBACK_PATH, JSON.stringify(list, null, 2)); } catch(e) {}
+}
+
+app.post('/api/feedback', (req, res) => {
+  const VALID = ['player', 'streamer', 'maybe', 'not-for-me'];
+  const { choice, roomId } = req.body || {};
+  if (!VALID.includes(choice)) return res.status(400).json({ ok: false });
+  const list = loadFeedback();
+  list.push({ choice, roomId: roomId || null, at: new Date().toISOString() });
+  saveFeedback(list);
+  res.json({ ok: true });
+});
+
+app.get('/admin/feedback', (req, res) => {
+  const list = loadFeedback();
+  const counts = { player: 0, streamer: 0, maybe: 0, 'not-for-me': 0 };
+  list.forEach(e => { if (counts[e.choice] !== undefined) counts[e.choice]++; });
+  const total = list.length;
+  const pct = (n) => total ? Math.round(n / total * 100) + '%' : '—';
+  res.send(`
+    <pre style="font-family:monospace;font-size:14px;padding:24px;background:#0a0a14;color:#e8e0d0;min-height:100vh">
+=== Belong Here — Feedback Responses ===
+
+Total responses: ${total}
+
+🎮 Yes, as a player       ${counts['player']}  (${pct(counts['player'])})
+🎙️  Yes, as a streamer     ${counts['streamer']}  (${pct(counts['streamer'])})
+🤔 Maybe                  ${counts['maybe']}  (${pct(counts['maybe'])})
+💜 Not for me             ${counts['not-for-me']}  (${pct(counts['not-for-me'])})
+
+Recent responses:
+${list.slice(-20).reverse().map(e => `  ${e.at.slice(0,16).replace('T',' ')}  ${e.choice}  ${e.roomId ? '('+e.roomId+')' : ''}`).join('\n') || '  (none yet)'}
+    </pre>
+  `);
+});
+
 app.get('/admin/stats', (req, res) => {
   const twitchCount = _stats.twitchLogins.length;
   const guestCount  = _stats.guestClientIds.length;

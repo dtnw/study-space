@@ -1662,4 +1662,31 @@
     const ae = document.activeElement;
     if (ae && (ae.id === 'friend-chat-input' || ae.id === 'chat-text-input')) ae.blur();
   });
+
+  // ── Feedback popup — shows after 3 minutes, once per device ──────────────
+  (function _initFeedbackPopup() {
+    if (localStorage.getItem('bh_feedback_done')) return;
+    setTimeout(() => {
+      const popup = document.getElementById('feedback-popup');
+      if (popup) popup.classList.remove('hidden');
+    }, 3 * 60 * 1000);
+  })();
+
+  window._submitFeedback = async function(choice) {
+    // Mark as done immediately so double-clicks don't re-show
+    localStorage.setItem('bh_feedback_done', '1');
+    // Swap to thank-you state
+    document.getElementById('fb-question')?.classList.add('hidden');
+    document.getElementById('fb-thankyou')?.classList.remove('hidden');
+    // Auto-close after 3s
+    setTimeout(() => document.getElementById('feedback-popup')?.classList.add('hidden'), 3000);
+    // Send to server (best-effort)
+    try {
+      await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ choice, roomId: window.__ROOM_ID__ }),
+      });
+    } catch(_) {}
+  };
 })();
