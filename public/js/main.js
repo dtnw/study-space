@@ -24,17 +24,14 @@
   })();
 
   // ── Room detection ─────────────────────────────────────────
+  // The URL path IS the creator's username (e.g. /derbysaren → roomId 'derbysaren').
+  // Theme overrides for known rooms; everything else defaults to 'study'.
   (function _detectRoom() {
-    const ROOMS = [
-      { id: 'derrizzmachine', theme: 'cafe',  creator: 'derrizzmachine', path: '/cafe' },
-      { id: 'derbysaren',     theme: 'study', creator: 'derbysaren',     path: '/play' },
-      { id: 'demo',           theme: 'demo',  creator: 'demo',           path: '/demo' },
-    ];
-    const p = window.location.pathname.toLowerCase();
-    const room = ROOMS.find(r => r.path === p) || ROOMS[1];
-    window.__ROOM_ID__      = room.id;
-    window.__ROOM_THEME__   = room.theme;
-    window.__ROOM_CREATOR__ = room.creator;
+    const THEME_MAP = { derrizzmachine: 'cafe', demo: 'demo' };
+    const username = window.location.pathname.replace(/^\/+/, '').toLowerCase().split('/')[0] || 'derbysaren';
+    window.__ROOM_ID__      = username;
+    window.__ROOM_THEME__   = THEME_MAP[username] || 'study';
+    window.__ROOM_CREATOR__ = username;
   })();
 
   const _tabChannel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('cc_game_tab') : null;

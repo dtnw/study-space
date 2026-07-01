@@ -11,9 +11,9 @@ const TWITCH_CONFIG_PATH = path.join(__dirname, 'data', 'twitch-config.json');
 const TWITCH_TOKEN_PATH  = path.join(__dirname, 'data', 'twitch-token.json');
 
 const ROOM_CONFIGS = [
-  { id: 'derbysaren',     creatorLogin: 'derbysaren',     name: "Derby's Study Space",   path: '/demo', theme: 'demo'  },
-  { id: 'demo',           creatorLogin: 'demo',           name: 'Demo Room',             path: '/demo', theme: 'demo',  hidden: true },
-  { id: 'derrizzmachine', creatorLogin: 'derrizzmachine', name: "DerRizzMachine's Café", path: '/play', theme: 'study', hidden: true },
+  { id: 'derbysaren',     creatorLogin: 'derbysaren',     name: "Derby's Study Space",   path: '/derbysaren', theme: 'demo'  },
+  { id: 'demo',           creatorLogin: 'demo',           name: 'Demo Room',             path: '/demo',       theme: 'demo',  hidden: true },
+  { id: 'derrizzmachine', creatorLogin: 'derrizzmachine', name: "DerRizzMachine's Café", path: '/derrizzmachine', theme: 'study', hidden: true },
 ];
 
 // Default room furniture — tilemap interior centre TX=550, TY=400 (map at 358,240; 12×10 tiles; 1-tile walls).
@@ -88,26 +88,30 @@ app.get('/health', (req, res) => {
   res.status(200).send('OK');
 });
 
-app.get('/',     (req, res) => res.sendFile(path.join(__dirname, 'public', 'landing.html')));
-app.get('/play', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-app.get('/cafe', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-app.get('/demo', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
+app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'landing.html')));
 
-// Direct space links: /space/derbysaren  or  /@derbysaren  → redirects to that room
+// Legacy paths → redirect to username-based URLs
+app.get('/demo', (req, res) => res.redirect('/derbysaren'));
+app.get('/play', (req, res) => res.redirect('/derbysaren'));
+app.get('/cafe', (req, res) => res.redirect('/derrizzmachine'));
+
+// Direct space links: /space/derbysaren or /@derbysaren → canonical username URL
 app.get('/space/:login', (req, res) => {
   const login = req.params.login.toLowerCase().trim();
   const room = ROOM_CONFIGS.find(r => r.creatorLogin?.toLowerCase() === login);
-  if (room) return res.redirect(room.path);
-  res.redirect('/'); // unknown space → back to lobby
+  if (room) return res.redirect('/' + room.creatorLogin.toLowerCase());
+  res.redirect('/');
 });
 app.get('/@:login', (req, res) => {
-  res.redirect('/space/' + req.params.login);
+  res.redirect('/' + req.params.login.toLowerCase());
+});
+
+// Dynamic room route: /:username serves the game if a room exists for that creator
+app.get('/:username', (req, res, next) => {
+  const username = req.params.username.toLowerCase().trim();
+  const room = ROOM_CONFIGS.find(r => r.creatorLogin?.toLowerCase() === username);
+  if (!room) return next(); // fall through to static files / 404
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
