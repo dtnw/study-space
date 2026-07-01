@@ -515,10 +515,10 @@ async function submitCreateRoom() {
       const succ    = document.getElementById('cr-success');
       const msg     = document.getElementById('cr-success-msg');
       const enterBtn = document.getElementById('cr-enter-btn');
-      const roomUrl = window.location.origin + data.roomPath;
+      const displayUrl = 'belonghere.cc' + data.roomPath;
       msg.innerHTML = data.alreadyExists
-        ? `You already have a room! It lives at <strong>${roomUrl}</strong>`
-        : `🎉 Your room is ready at <strong>${roomUrl}</strong> — go make it cozy!`;
+        ? `You already have a room! It lives at <strong>${displayUrl}</strong>`
+        : `🎉 Your room is ready at <strong>${displayUrl}</strong> — go make it cozy!`;
       enterBtn.href = data.roomPath;
       succ.classList.remove('hidden');
     } else {
