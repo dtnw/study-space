@@ -9,6 +9,10 @@ const nodemailer = require('nodemailer');
 // ── Email config ─────────────────────────────────────────────────────────────
 const EMAIL_CONFIG_PATH = path.join(__dirname, 'data', 'email-config.json');
 function loadEmailConfig() {
+  // Env vars take priority (Railway), fall back to local JSON file
+  if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+    return { host: 'smtp.gmail.com', port: 587, user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS, to: process.env.EMAIL_TO || process.env.EMAIL_USER };
+  }
   try { if (fs.existsSync(EMAIL_CONFIG_PATH)) return JSON.parse(fs.readFileSync(EMAIL_CONFIG_PATH, 'utf8')); } catch(e) {}
   return {};
 }
