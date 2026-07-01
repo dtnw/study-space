@@ -12,7 +12,11 @@
       "Bash(node --check public/js/GameScene.js)",
       "Bash(node --check public/js/main.js)",
       "Bash(node --check public/js/landing.js)",
-      "Bash(ls \"C:\\\\Users\\\\derby\\\\Documents\\\\The Game Assets\" 2>/dev/null | head -40)"
+      "Bash(ls \"C:\\\\Users\\\\derby\\\\Documents\\\\The Game Assets\" 2>/dev/null | head -40)",
+      "Bash(git push *)",
+      "Bash(gh pr create --title 'v3.33 — UI polish, landing rebrand & DIY panel cleanup' --body ' *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }
