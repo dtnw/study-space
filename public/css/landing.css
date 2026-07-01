@@ -419,8 +419,11 @@ body { min-height: 100%; background: var(--bg); color: var(--text); font-family:
   text-align: left;
 }
 .lp-creator-perks li { font-size: 14px; color: var(--dim); line-height: 1.7; padding-left: 4px; }
+.lp-creator-actions { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; margin-top: 8px; }
 .lp-creator-btn { font-size: 9px; padding: 12px 28px; background: var(--accent); color: #fff; border: none; cursor: pointer; }
 .lp-creator-btn:hover { background: #b060e8; }
+.lp-create-room-btn { background: var(--accent2); color: #0a0a14; }
+.lp-create-room-btn:hover { background: #5aa0d8; }
 
 /* ── Creator / Interest modal ────────────────────────────── */
 .lp-modal-overlay {

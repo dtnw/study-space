@@ -465,3 +465,75 @@ document.getElementById('interest-submit')?.addEventListener('click', async () =
     if (btn) btn.disabled = false;
   }
 });
+
+// ── Create a Room modal ───────────────────────────────────────────────────────
+function openCreateRoomModal() {
+  const modal = document.getElementById('create-room-modal');
+  if (!modal) return;
+  // Reset state
+  document.getElementById('cr-error').textContent = '';
+  document.getElementById('cr-code-input').value = '';
+  document.getElementById('cr-success').classList.add('hidden');
+  document.getElementById('cr-code-form').classList.remove('hidden');
+  document.getElementById('cr-not-signed-in').classList.add('hidden');
+
+  const session = _getSession();
+  const hasTwitch = !!(session?.twitchLogin);
+  if (!hasTwitch) {
+    document.getElementById('cr-not-signed-in').classList.remove('hidden');
+    document.getElementById('cr-code-form').classList.add('hidden');
+  }
+  modal.classList.remove('hidden');
+  if (hasTwitch) setTimeout(() => document.getElementById('cr-code-input')?.focus(), 50);
+}
+
+function closeCreateRoomModal() {
+  document.getElementById('create-room-modal')?.classList.add('hidden');
+}
+
+async function submitCreateRoom() {
+  const code  = document.getElementById('cr-code-input')?.value.trim().toUpperCase();
+  const errEl = document.getElementById('cr-error');
+  const btn   = document.getElementById('cr-submit');
+  const session = _getSession();
+
+  errEl.textContent = '';
+  if (!code) { errEl.textContent = 'Please enter your invite code.'; return; }
+  if (!session?.twitchLogin) { errEl.textContent = 'Sign in with Twitch first.'; return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Creating…';
+  try {
+    const res  = await fetch('/api/create-room', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code, twitchLogin: session.twitchLogin }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      document.getElementById('cr-code-form').classList.add('hidden');
+      const succ    = document.getElementById('cr-success');
+      const msg     = document.getElementById('cr-success-msg');
+      const enterBtn = document.getElementById('cr-enter-btn');
+      const roomUrl = window.location.origin + data.roomPath;
+      msg.innerHTML = data.alreadyExists
+        ? `You already have a room! It lives at <strong>${roomUrl}</strong>`
+        : `🎉 Your room is ready at <strong>${roomUrl}</strong> — go make it cozy!`;
+      enterBtn.href = data.roomPath;
+      succ.classList.remove('hidden');
+    } else {
+      errEl.textContent = data.error || 'Invalid code.';
+      btn.disabled = false;
+      btn.textContent = '🚀 Create My Room';
+    }
+  } catch(e) {
+    errEl.textContent = 'Network error. Try again.';
+    btn.disabled = false;
+    btn.textContent = '🚀 Create My Room';
+  }
+}
+
+// Close modals on backdrop click
+document.addEventListener('click', e => {
+  if (e.target.id === 'create-room-modal') closeCreateRoomModal();
+});

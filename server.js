@@ -16,6 +16,20 @@ const ROOM_CONFIGS = [
   { id: 'derrizzmachine', creatorLogin: 'derrizzmachine', name: "DerRizzMachine's Café", path: '/derrizzmachine', theme: 'study', hidden: true },
 ];
 
+// ── Dynamic rooms (user-created, persisted to data/rooms.json) ──────────────
+const DYNAMIC_ROOMS_PATH = path.join(__dirname, 'data', 'rooms.json');
+function loadDynamicRooms() {
+  try { if (fs.existsSync(DYNAMIC_ROOMS_PATH)) return JSON.parse(fs.readFileSync(DYNAMIC_ROOMS_PATH, 'utf8')); } catch(e) {}
+  return [];
+}
+function saveDynamicRooms(rooms) {
+  try { fs.mkdirSync(path.dirname(DYNAMIC_ROOMS_PATH), { recursive: true }); fs.writeFileSync(DYNAMIC_ROOMS_PATH, JSON.stringify(rooms, null, 2)); } catch(e) {}
+}
+// Merge dynamic rooms into ROOM_CONFIGS at startup (avoid duplicating built-in rooms)
+loadDynamicRooms().forEach(r => {
+  if (!ROOM_CONFIGS.find(c => c.id === r.id)) ROOM_CONFIGS.push(r);
+});
+
 // Default room furniture — tilemap interior centre TX=550, TY=400 (map at 358,240; 12×10 tiles; 1-tile walls).
 const DEFAULT_DEMO_LAYOUT = [
   { type: 'desk-six', cx: 550, cy: 400, rotation: 0, imgKey: 'furn_big_table' },
@@ -549,6 +563,39 @@ app.get('/admin/generate-code', (req, res) => {
   codes.push({ code, used: false, usedBy: null, createdAt: new Date().toISOString() });
   saveCreatorCodes(codes);
   res.json({ code, note: 'Share this with your customer. It can only be used once.' });
+});
+
+// ── Room creation ─────────────────────────────────────────────────────────────
+const ROOM_CREATE_CODE = 'SECRETVIP';
+app.post('/api/create-room', (req, res) => {
+  const { code, twitchLogin } = req.body || {};
+  if (!code || !twitchLogin) return res.status(400).json({ error: 'Missing fields.' });
+  const safeLogin = twitchLogin.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 25);
+  if (!safeLogin) return res.status(400).json({ error: 'Invalid Twitch login.' });
+  if (code.trim().toUpperCase() !== ROOM_CREATE_CODE) return res.status(403).json({ error: 'Invalid code.' });
+  // Check if room already exists
+  const existing = ROOM_CONFIGS.find(r => r.creatorLogin?.toLowerCase() === safeLogin);
+  if (existing) {
+    return res.json({ ok: true, roomPath: existing.path, alreadyExists: true });
+  }
+  // Create new room
+  const newRoom = {
+    id: safeLogin,
+    creatorLogin: safeLogin,
+    name: `${safeLogin}'s Space`,
+    path: '/' + safeLogin,
+    theme: 'demo',
+    createdAt: new Date().toISOString(),
+  };
+  ROOM_CONFIGS.push(newRoom);
+  // Also persist to dynamic rooms file (excluding built-in rooms)
+  const dynamic = loadDynamicRooms().filter(r => r.id !== safeLogin);
+  dynamic.push(newRoom);
+  saveDynamicRooms(dynamic);
+  // Init room state so players can join immediately
+  getRoomState(safeLogin);
+  roomSpaceStatus[safeLogin] = { live: false, twitchUser: safeLogin, twitchLogin: safeLogin, streamTitle: null, viewerCount: 0, gameName: null };
+  res.json({ ok: true, roomPath: newRoom.path });
 });
 
 app.get('/api/stripe/checkout', async (req, res) => {

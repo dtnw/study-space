@@ -58,8 +58,45 @@
         <li>🎨 Early customisation access before anyone else</li>
         <li>💬 Direct line to shape what gets built</li>
       </ul>
-      <button class="pixel-btn lp-creator-btn" onclick="openCreatorModal()">✨ Express Interest</button>
+      <div class="lp-creator-actions">
+        <button class="pixel-btn lp-creator-btn" onclick="openCreatorModal()">✨ Express Interest</button>
+        <button class="pixel-btn lp-creator-btn lp-create-room-btn" onclick="openCreateRoomModal()">🏠 Create a Room</button>
+      </div>
     </section>
+
+    <!-- Create a Room modal -->
+    <div id="create-room-modal" class="lp-modal-overlay hidden">
+      <div class="lp-modal-box">
+        <h2 class="lp-modal-title">CREATE YOUR ROOM</h2>
+        <!-- State: not signed in -->
+        <div id="cr-not-signed-in" class="hidden">
+          <p class="lp-modal-sub">You need to sign in with Twitch first to create a room.</p>
+          <div class="lp-modal-actions">
+            <a href="/auth/twitch?role=player" class="pixel-btn lp-pixel-btn">🟣 Sign in with Twitch</a>
+            <button class="pixel-btn lp-pixel-btn danger" onclick="closeCreateRoomModal()">✕ Cancel</button>
+          </div>
+        </div>
+        <!-- State: signed in, enter code -->
+        <div id="cr-code-form">
+          <p class="lp-modal-sub">Enter your invite code to unlock your personal space at <strong>belonghere.cc/yourusername</strong>.</p>
+          <label class="lp-modal-label">Invite Code <span class="lp-modal-required">*</span></label>
+          <input type="text" id="cr-code-input" class="lp-modal-input" placeholder="Enter code..." maxlength="32" autocomplete="off" style="letter-spacing:2px;text-transform:uppercase;" />
+          <p id="cr-error" class="lp-modal-error"></p>
+          <div class="lp-modal-actions">
+            <button id="cr-submit" class="pixel-btn lp-pixel-btn" onclick="submitCreateRoom()">🚀 Create My Room</button>
+            <button class="pixel-btn lp-pixel-btn danger" onclick="closeCreateRoomModal()">✕ Cancel</button>
+          </div>
+        </div>
+        <!-- State: success -->
+        <div id="cr-success" class="hidden">
+          <p class="lp-modal-sub" id="cr-success-msg"></p>
+          <div class="lp-modal-actions">
+            <a id="cr-enter-btn" href="#" class="pixel-btn lp-pixel-btn">🏠 Enter My Room</a>
+            <button class="pixel-btn lp-pixel-btn danger" onclick="closeCreateRoomModal()">✕ Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <!-- Creator interest modal (hidden) -->
     <div id="creator-modal" class="lp-modal-overlay hidden">
