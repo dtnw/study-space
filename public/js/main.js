@@ -765,28 +765,15 @@
   const addTaskBtn     = document.getElementById('add-task-btn');
   const confirmTaskBtn = document.getElementById('confirm-task-btn');
   const cancelTaskBtn  = document.getElementById('cancel-task-btn');
-  const shareToggle    = document.getElementById('task-share-toggle');
+  const shareCheckbox  = document.getElementById('task-share-checkbox');
 
-  // Persist share preference
-  let _shareTask = localStorage.getItem('bh_share_task') !== 'false';
-  function _updateShareToggle() {
-    if (_shareTask) {
-      shareToggle.textContent = '🌍 Share with room';
-      shareToggle.classList.add('shared');
-      shareToggle.classList.remove('private');
-    } else {
-      shareToggle.textContent = '🔒 Keep private';
-      shareToggle.classList.remove('shared');
-      shareToggle.classList.add('private');
-    }
+  // Restore last preference (default: checked/shared)
+  if (shareCheckbox) {
+    shareCheckbox.checked = localStorage.getItem('bh_share_task') !== 'false';
+    shareCheckbox.addEventListener('change', () => {
+      localStorage.setItem('bh_share_task', shareCheckbox.checked);
+    });
   }
-  _updateShareToggle();
-  shareToggle.addEventListener('click', () => {
-    _shareTask = !_shareTask;
-    localStorage.setItem('bh_share_task', _shareTask);
-    _updateShareToggle();
-    SoundManager.play('click');
-  });
 
   addTaskBtn.addEventListener('click', () => {
     SoundManager.play('click');
@@ -799,7 +786,7 @@
   function submitTask() {
     const text = taskInput.value.trim();
     if (text) {
-      window.TaskManager.addTask(text, _shareTask);
+      window.TaskManager.addTask(text, shareCheckbox ? shareCheckbox.checked : true);
       SoundManager.play('complete');
     }
     closeTaskModal();
