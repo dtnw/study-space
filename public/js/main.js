@@ -1701,7 +1701,7 @@
       await fetch('/api/feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ choice, roomId: window.__ROOM_ID__ }),
+        body: JSON.stringify({ choice, roomId: window.__ROOM_ID__, twitchLogin: window._twitchLogin || null }),
       });
     } catch(_) {}
   };

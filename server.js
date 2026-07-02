@@ -693,15 +693,17 @@ function saveFeedback(list) {
 app.post('/api/feedback', (req, res) => {
   const VALID = ['player', 'streamer', 'maybe', 'not-for-me'];
   const LABELS = { player: '🎮 Yes, as a player', streamer: '🎙️ Yes, as a streamer', maybe: '🤔 Maybe', 'not-for-me': '💜 Not for me' };
-  const { choice, roomId } = req.body || {};
+  const { choice, roomId, twitchLogin } = req.body || {};
   if (!VALID.includes(choice)) return res.status(400).json({ ok: false });
+  const safeLogin = twitchLogin ? twitchLogin.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 25) : null;
+  const who = safeLogin ? `@${safeLogin}` : 'guest';
   const list = loadFeedback();
-  list.push({ choice, roomId: roomId || null, at: new Date().toISOString() });
+  list.push({ choice, roomId: roomId || null, who, at: new Date().toISOString() });
   saveFeedback(list);
   res.json({ ok: true });
   sendNotificationEmail(
-    `💬 Feedback — ${LABELS[choice] || choice}`,
-    `<pre style="font-family:monospace">Choice: ${LABELS[choice] || choice}\nRoom:   ${roomId || '—'}\nTime:   ${new Date().toISOString()}\nTotal responses so far: ${list.length}</pre>`
+    `💬 Feedback — ${LABELS[choice] || choice} (${who})`,
+    `<pre style="font-family:monospace">Who:    ${who}\nChoice: ${LABELS[choice] || choice}\nRoom:   ${roomId || '—'}\nTime:   ${new Date().toISOString()}\nTotal responses so far: ${list.length}</pre>`
   );
 });
 
@@ -724,7 +726,7 @@ Total responses: ${total}
 💜 Not for me             ${counts['not-for-me']}  (${pct(counts['not-for-me'])})
 
 Recent responses:
-${list.slice(-20).reverse().map(e => `  ${e.at.slice(0,16).replace('T',' ')}  ${e.choice}  ${e.roomId ? '('+e.roomId+')' : ''}`).join('\n') || '  (none yet)'}
+${list.slice(-20).reverse().map(e => `  ${e.at.slice(0,16).replace('T',' ')}  ${(e.who||'guest').padEnd(20)}  ${e.choice}`).join('\n') || '  (none yet)'}
     </pre>
   `);
 });
