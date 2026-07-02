@@ -833,6 +833,14 @@
     else              window.gameScene?.exitCreatorMode();
   });
 
+  // Reset layout to default (creator only)
+  document.getElementById('diy-reset-layout')?.addEventListener('click', () => {
+    if (window.myRole !== 'creator') return;
+    if (!confirm('Reset room to default layout? This cannot be undone.')) return;
+    SoundManager.play('click');
+    window.socket?.emit('resetDIYLayout');
+  });
+
   // Exit creator from inside the panel
   document.getElementById('diy-exit-creator')?.addEventListener('click', () => {
     SoundManager.play('click');

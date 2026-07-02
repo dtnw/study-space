@@ -129,13 +129,31 @@ const roomState = new Map();
 let _callIdSeq = 0;
 function _makeCallId() { return 'call-' + Date.now() + '-' + (++_callIdSeq); }
 
+function layoutPath(roomId) {
+  return path.join(__dirname, 'data', `${roomId}-layout.json`);
+}
+function loadLayoutForRoom(roomId) {
+  try {
+    const p = layoutPath(roomId);
+    if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, 'utf8'));
+  } catch(e) {}
+  return [...DEFAULT_DEMO_LAYOUT];
+}
+function saveLayoutForRoom(roomId, items) {
+  try {
+    const p = layoutPath(roomId);
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, JSON.stringify(items));
+  } catch(e) {}
+}
+
 function getRoomState(roomId) {
   if (!roomState.has(roomId)) {
     roomState.set(roomId, {
       players:       {},
       clientIdMap:   {},
       seatOccupancy: {},
-      roomLayout:    [...DEFAULT_DEMO_LAYOUT],
+      roomLayout:    loadLayoutForRoom(roomId),
       rolesData:     loadRolesForRoom(roomId),
       activeCalls:   {},
     });
@@ -1096,13 +1114,23 @@ io.on('connection', (socket) => {
   socket.on('saveDIYLayout', ({ items }) => {
     const self = me(); if (!self || self.role !== 'creator') return;
     if (!Array.isArray(items)) return;
+    const rid = socket.data.roomId;
     R().roomLayout = items;
+    saveLayoutForRoom(rid, items);
+    bcast('roomLayout', items);
+  });
+
+  socket.on('resetDIYLayout', () => {
+    const self = me(); if (!self || self.role !== 'creator') return;
+    const rid = socket.data.roomId;
+    const items = [...DEFAULT_DEMO_LAYOUT];
+    R().roomLayout = items;
+    saveLayoutForRoom(rid, items);
     bcast('roomLayout', items);
   });
 
   socket.on('getLayout', () => {
     const rs = R(); if (!rs) return;
-    const rid = socket.data.roomId;
     const layout = rs.roomLayout || [...DEFAULT_DEMO_LAYOUT];
     socket.emit('roomLayout', layout);
   });
