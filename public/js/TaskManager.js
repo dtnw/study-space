@@ -265,13 +265,13 @@
       renderPersonal();
     },
 
-    addTask(text) {
+    addTask(text, share = true) {
       if (!text.trim()) return;
       const localId = `local-${Date.now()}`;
       _personalTasks.push({ id: localId, text: text.trim(), completed: false, coinsEarned: 0 });
       _savePersonal();
       renderPersonal();
-      window.socket.emit('addTask', { text: text.trim(), playerName: _myName });
+      if (share) window.socket.emit('addTask', { text: text.trim(), playerName: _myName });
     },
 
     // ── Socket event handlers ───────────────────────────────

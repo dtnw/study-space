@@ -765,6 +765,28 @@
   const addTaskBtn     = document.getElementById('add-task-btn');
   const confirmTaskBtn = document.getElementById('confirm-task-btn');
   const cancelTaskBtn  = document.getElementById('cancel-task-btn');
+  const shareToggle    = document.getElementById('task-share-toggle');
+
+  // Persist share preference
+  let _shareTask = localStorage.getItem('bh_share_task') !== 'false';
+  function _updateShareToggle() {
+    if (_shareTask) {
+      shareToggle.textContent = '🌍 Share with room';
+      shareToggle.classList.add('shared');
+      shareToggle.classList.remove('private');
+    } else {
+      shareToggle.textContent = '🔒 Keep private';
+      shareToggle.classList.remove('shared');
+      shareToggle.classList.add('private');
+    }
+  }
+  _updateShareToggle();
+  shareToggle.addEventListener('click', () => {
+    _shareTask = !_shareTask;
+    localStorage.setItem('bh_share_task', _shareTask);
+    _updateShareToggle();
+    SoundManager.play('click');
+  });
 
   addTaskBtn.addEventListener('click', () => {
     SoundManager.play('click');
@@ -777,7 +799,7 @@
   function submitTask() {
     const text = taskInput.value.trim();
     if (text) {
-      window.TaskManager.addTask(text);
+      window.TaskManager.addTask(text, _shareTask);
       SoundManager.play('complete');
     }
     closeTaskModal();
