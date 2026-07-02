@@ -164,7 +164,8 @@
     }
   });
 
-  socket.on('init', ({ tasks }) => {
+  socket.on('init', () => {});
+  socket.on('roomTasksInit', ({ tasks }) => {
     window.TaskManager.onInit(tasks);
   });
   socket.on('taskAdded',     (task)       => window.TaskManager.onTaskAdded(task));
@@ -347,7 +348,7 @@
 
     window.myRole = effectiveRole;
     // Show/hide privileged UI
-    document.getElementById('clear-tasks-btn')?.classList.toggle('hidden', effectiveRole === 'regular');
+    document.getElementById('clear-tasks-wrap')?.classList.toggle('hidden', effectiveRole === 'regular');
     if (effectiveRole !== 'regular') window.socket?.emit('getBannedList');
     window._refreshSpacesPanel?.();
     // DIY panel is visible to everyone — non-creators can play locally but saves are blocked
@@ -397,10 +398,9 @@
     _renderBannedList(bannedList);
   });
 
-  // ── allTasksCleared ────────────────────────────────────
-  socket.on('allTasksCleared', () => {
-    window.TaskManager?.onAllTasksCleared?.();
-  });
+  // ── allTasksCleared / tasksRemoved ────────────────────
+  socket.on('allTasksCleared', () => window.TaskManager?.onAllTasksCleared?.());
+  socket.on('tasksRemoved', ({ taskIds }) => window.TaskManager?.onTasksRemoved?.(taskIds));
 
   // Chair occupancy events from server
   socket.on('chairTaken', ({ chairId, playerId, side }) => {
@@ -654,10 +654,29 @@
 
   // Change Appearance removed — character auto-assigned from name
 
-  // ── Clear all shared tasks (creator/mod) ────────────────────
-  document.getElementById('clear-tasks-btn')?.addEventListener('click', () => {
-    if (!confirm('Clear ALL shared tasks? This cannot be undone.')) return;
-    window.socket?.emit('clearAllTasks');
+  // ── Clear shared tasks menu (creator/mod) ───────────────────
+  const clearBtn  = document.getElementById('clear-tasks-btn');
+  const clearMenu = document.getElementById('clear-tasks-menu');
+  clearBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    clearMenu?.classList.toggle('hidden');
+  });
+  document.addEventListener('click', () => clearMenu?.classList.add('hidden'));
+  clearMenu?.addEventListener('click', (e) => {
+    const action = e.target.dataset.action;
+    if (!action) return;
+    clearMenu.classList.add('hidden');
+    if (action === 'completed') {
+      if (!confirm('Remove all completed tasks from the shared list?')) return;
+      window.socket?.emit('clearCompletedTasks');
+    } else if (action === 'all') {
+      if (!confirm('Clear ALL shared tasks? This cannot be undone.')) return;
+      window.socket?.emit('clearAllTasks');
+    } else if (action === 'old') {
+      const days = parseInt(prompt('Remove tasks older than how many days?', '7'), 10);
+      if (!days || days < 1) return;
+      window.socket?.emit('clearOldTasks', { days });
+    }
   });
 
   // ── Pomodoro modal ─────────────────────────────────────────

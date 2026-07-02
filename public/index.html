@@ -33,7 +33,7 @@
         <button id="stop-timer-btn"  class="pixel-btn small danger">■</button>
       </div>
       <div id="header-right">
-        <span id="coin-count" class="coin-count">🪙 0</span> <span style="font-size: 14px;opacity:0.5;font-family:monospace">v3.46</span>
+        <span id="coin-count" class="coin-count">🪙 0</span> <span style="font-size: 14px;opacity:0.5;font-family:monospace">v3.48</span>
         <div class="status-block">
           <span id="status-indicator" class="status-idle">● IDLE</span>
           <div class="audio-btns">
@@ -70,7 +70,14 @@
         <div class="task-section">
           <div class="panel-header">
             <span>🌍 SHARED TASKS</span>
-            <button id="clear-tasks-btn" class="pixel-btn small danger hidden" title="Clear all shared tasks">🗑</button>
+            <div id="clear-tasks-wrap" class="hidden" style="position:relative;">
+              <button id="clear-tasks-btn" class="pixel-btn small danger" title="Clear tasks">🗑</button>
+              <div id="clear-tasks-menu" class="task-clear-menu hidden">
+                <button data-action="completed">Clear completed</button>
+                <button data-action="all">Clear all</button>
+                <button data-action="old">Clear older than…</button>
+              </div>
+            </div>
           </div>
           <ul id="global-task-list" class="task-list"></ul>
           <div class="panel-empty" id="global-empty" style="font-size: 14px;line-height:1.7;">No tasks yet.</div>

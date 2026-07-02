@@ -367,5 +367,11 @@
       _globalTasks = [];
       renderGlobal();
     },
+
+    onTasksRemoved(taskIds) {
+      const set = new Set(taskIds);
+      _globalTasks = _globalTasks.filter(t => !set.has(t.id));
+      renderGlobal();
+    },
   };
 })();

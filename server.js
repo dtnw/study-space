@@ -105,6 +105,33 @@ function saveTasks() {
   } catch (e) { console.warn('Could not save tasks:', e.message); }
 }
 
+// ── Per-room task persistence ─────────────────────────────────────────────────
+function roomTasksPath(roomId) {
+  return path.join(__dirname, 'data', `${roomId}-tasks.json`);
+}
+function loadRoomTasks(roomId) {
+  try {
+    const p = roomTasksPath(roomId);
+    if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, 'utf8'));
+    // One-time migration: seed derbysaren's tasks from legacy global tasks.json
+    if (roomId === 'derbysaren' && fs.existsSync(DATA_PATH)) {
+      const legacy = JSON.parse(fs.readFileSync(DATA_PATH, 'utf8'));
+      if (Array.isArray(legacy) && legacy.length) {
+        saveRoomTasks(roomId, legacy);
+        return legacy;
+      }
+    }
+  } catch(e) {}
+  return [];
+}
+function saveRoomTasks(roomId, tasks) {
+  try {
+    const p = roomTasksPath(roomId);
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, JSON.stringify(tasks));
+  } catch(e) {}
+}
+
 // Per-room roles: { creatorClientId, modClientIds:[], bannedClientIds:[{clientId,name}] }
 function loadRolesForRoom(roomId) {
   const filename = roomId === 'derbysaren' ? 'roles.json' : `${roomId}-roles.json`;
@@ -156,6 +183,7 @@ function getRoomState(roomId) {
       roomLayout:    loadLayoutForRoom(roomId),
       rolesData:     loadRolesForRoom(roomId),
       activeCalls:   {},
+      tasks:         loadRoomTasks(roomId),
     });
   }
   return roomState.get(roomId);
@@ -840,8 +868,8 @@ io.on('connection', (socket) => {
   const bcast  = (evt, d)   => { if (socket.data.roomId) socket.to(socket.data.roomId).emit(evt, d); };
   const emitR  = (evt, d)   => { if (socket.data.roomId) io.to(socket.data.roomId).emit(evt, d); };
 
-  // Send tasks immediately (global); room status + layout sent after playerJoin
-  socket.emit('init', { tasks: globalTasks });
+  // Tasks are sent after playerJoin (room-scoped); see playerJoin handler below
+  socket.emit('init', { tasks: [] });
 
   // ── Player join ──────────────────────────────────────────
   socket.on('playerJoin', ({ name, gender, shirtColor, charNum, clientId, twitchLogin, roomId, startX, startY }) => {
@@ -914,6 +942,7 @@ io.on('connection', (socket) => {
     socket.emit('yourRole', { role });
     socket.emit('spaceStatus', roomSpaceStatus[safeRoomId] || {});
     if (rs.roomLayout) socket.emit('roomLayout', rs.roomLayout);
+    socket.emit('roomTasksInit', { tasks: rs.tasks || [] });
 
     socket.emit('existingPlayers', Object.values(rs.players)
       .filter(p => p.id !== socket.id)
@@ -1013,44 +1042,66 @@ io.on('connection', (socket) => {
     socket.emit('chatMessage', { fromId: socket.id, fromName: sender.name, message: safeMsg, isSelf: true });
   });
 
-  // ── Tasks (global across all rooms) ──────────────────────
+  // ── Tasks (per-room) ─────────────────────────────────────
   const myClientId = () => me()?.clientId || socket.id;
+  const roomTasks  = () => R()?.tasks;
+  const saveRT     = () => { const rid = socket.data.roomId; if (rid) saveRoomTasks(rid, R().tasks); };
 
   socket.on('addTask', ({ text, playerName }) => {
     if (!allow.addTask()) return;
+    const rt = roomTasks(); if (!rt) return;
     const safeText = sanitise(text, 120); if (!safeText) return;
     const p = me();
     const task = { id: `${(p?.clientId || socket.id)}-${Date.now()}`, text: safeText, playerName: p ? p.name : sanitise(playerName, 24), playerId: p?.clientId || socket.id, completed: false, createdAt: new Date().toISOString() };
-    globalTasks.push(task);
-    const incomplete = globalTasks.filter(t => !t.completed);
-    const completed  = globalTasks.filter(t =>  t.completed).slice(-200);
-    globalTasks = [...incomplete, ...completed];
-    saveTasks();
-    io.emit('taskAdded', task);
+    rt.push(task);
+    const incomplete = rt.filter(t => !t.completed);
+    const completed  = rt.filter(t =>  t.completed).slice(-200);
+    R().tasks = [...incomplete, ...completed];
+    saveRT();
+    emitR('taskAdded', task);
   });
 
   socket.on('completeTask', ({ taskId }) => {
-    const task = globalTasks.find(t => t.id === taskId && t.playerId === myClientId());
-    if (task) { task.completed = true; saveTasks(); io.emit('taskCompleted', { taskId }); }
+    const rt = roomTasks(); if (!rt) return;
+    const task = rt.find(t => t.id === taskId && t.playerId === myClientId());
+    if (task) { task.completed = true; saveRT(); emitR('taskCompleted', { taskId }); }
   });
   socket.on('uncompleteTask', ({ taskId }) => {
-    const task = globalTasks.find(t => t.id === taskId && t.playerId === myClientId());
-    if (task) { task.completed = false; saveTasks(); io.emit('taskUncompleted', { taskId }); }
+    const rt = roomTasks(); if (!rt) return;
+    const task = rt.find(t => t.id === taskId && t.playerId === myClientId());
+    if (task) { task.completed = false; saveRT(); emitR('taskUncompleted', { taskId }); }
   });
   socket.on('deleteTask', ({ taskId }) => {
-    const task = globalTasks.find(t => t.id === taskId);
-    if (task && task.playerId === myClientId()) { globalTasks = globalTasks.filter(t => t.id !== taskId); saveTasks(); io.emit('taskDeleted', { taskId }); }
+    const rt = roomTasks(); if (!rt) return;
+    const task = rt.find(t => t.id === taskId && t.playerId === myClientId());
+    if (task) { R().tasks = rt.filter(t => t.id !== taskId); saveRT(); emitR('taskDeleted', { taskId }); }
   });
   socket.on('editTask', ({ taskId, text }) => {
+    const rt = roomTasks(); if (!rt) return;
     if (!text || typeof text !== 'string') return;
-    const safeText = text.trim().slice(0, 200);
-    if (!safeText) return;
-    const task = globalTasks.find(t => t.id === taskId && t.playerId === myClientId());
-    if (task) { task.text = safeText; saveTasks(); io.emit('taskEdited', { taskId, text: safeText }); }
+    const safeText = text.trim().slice(0, 200); if (!safeText) return;
+    const task = rt.find(t => t.id === taskId && t.playerId === myClientId());
+    if (task) { task.text = safeText; saveRT(); emitR('taskEdited', { taskId, text: safeText }); }
   });
   socket.on('clearAllTasks', () => {
     const p = me(); if (!p || (p.role !== 'creator' && p.role !== 'mod')) return;
-    globalTasks = []; saveTasks(); io.emit('allTasksCleared');
+    R().tasks = []; saveRT(); emitR('allTasksCleared');
+  });
+  socket.on('clearCompletedTasks', () => {
+    const p = me(); if (!p || (p.role !== 'creator' && p.role !== 'mod')) return;
+    const rt = roomTasks(); if (!rt) return;
+    const removed = rt.filter(t => t.completed).map(t => t.id);
+    R().tasks = rt.filter(t => !t.completed); saveRT();
+    emitR('tasksRemoved', { taskIds: removed });
+  });
+  socket.on('clearOldTasks', ({ days }) => {
+    const p = me(); if (!p || (p.role !== 'creator' && p.role !== 'mod')) return;
+    const d = parseInt(days, 10); if (!d || d < 1) return;
+    const rt = roomTasks(); if (!rt) return;
+    const cutoff = Date.now() - d * 86400000;
+    const removed = rt.filter(t => !t.createdAt || new Date(t.createdAt).getTime() < cutoff).map(t => t.id);
+    R().tasks = rt.filter(t => t.createdAt && new Date(t.createdAt).getTime() >= cutoff); saveRT();
+    emitR('tasksRemoved', { taskIds: removed });
   });
 
   // ── Status icon ───────────────────────────────────────────
