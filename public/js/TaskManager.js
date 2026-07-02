@@ -30,10 +30,13 @@
       li.innerHTML = `
         <div class="task-checkbox clickable">${t.completed ? '✓' : ''}</div>
         <div class="task-body">${escHtml(t.text)}</div>
+        <button class="task-edit" data-id="${t.id}" title="Edit">✎</button>
         <button class="task-delete" data-id="${t.id}" title="Delete">✕</button>
       `;
-      li.querySelector('.task-checkbox').addEventListener('click', () => {
-        togglePersonal(t.id);
+      li.querySelector('.task-checkbox').addEventListener('click', () => togglePersonal(t.id));
+      li.querySelector('.task-edit').addEventListener('click', (e) => {
+        e.stopPropagation();
+        startEditPersonal(li, t);
       });
       li.querySelector('.task-delete').addEventListener('click', (e) => {
         e.stopPropagation();
@@ -41,6 +44,34 @@
       });
       ul.appendChild(li);
     });
+  }
+
+  function startEditPersonal(li, t) {
+    const body = li.querySelector('.task-body');
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'task-edit-input';
+    input.value = t.text;
+    body.replaceWith(input);
+    li.querySelector('.task-edit').style.display = 'none';
+    input.focus();
+    input.select();
+    const save = () => {
+      const newText = input.value.trim();
+      if (newText && newText !== t.text) {
+        t.text = newText;
+        _savePersonal();
+        // Sync to global board if there's a matching task
+        const globalMatch = _globalTasks.find(g => g.playerId === _myPlayerId && g.text !== newText && g.id);
+        if (globalMatch) window.socket?.emit('editTask', { taskId: globalMatch.id, text: newText });
+      }
+      renderPersonal();
+    };
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') save();
+      if (e.key === 'Escape') renderPersonal();
+    });
+    input.addEventListener('blur', save);
   }
 
   function renderGlobal() {
@@ -59,29 +90,55 @@
           ${escHtml(t.text)}
           <div class="task-owner">${escHtml(t.playerName)}</div>
         </div>
+        ${isOwn ? `<button class="task-edit" data-id="${t.id}" title="Edit">✎</button>` : ''}
         ${isOwn ? `<button class="task-delete" data-id="${t.id}" title="Delete">✕</button>` : ''}
       `;
-      // Owner can toggle (check or uncheck) their own task on the shared board
       if (isOwn) {
         li.querySelector('.task-checkbox').addEventListener('click', () => {
-          if (!t.completed) {
-            window.socket.emit('completeTask', { taskId: t.id });
-          } else {
-            window.socket.emit('uncompleteTask', { taskId: t.id });
-          }
+          window.socket.emit(t.completed ? 'uncompleteTask' : 'completeTask', { taskId: t.id });
         });
-      }
-      if (isOwn) {
-        const delBtn = li.querySelector('.task-delete');
-        if (delBtn) {
-          delBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            window.socket.emit('deleteTask', { taskId: t.id });
-          });
-        }
+        li.querySelector('.task-edit').addEventListener('click', (e) => {
+          e.stopPropagation();
+          startEditGlobal(li, t);
+        });
+        li.querySelector('.task-delete').addEventListener('click', (e) => {
+          e.stopPropagation();
+          window.socket.emit('deleteTask', { taskId: t.id });
+        });
       }
       ul.appendChild(li);
     });
+  }
+
+  function startEditGlobal(li, t) {
+    const body = li.querySelector('.task-body');
+    const ownerEl = body.querySelector('.task-owner');
+    const ownerHtml = ownerEl ? ownerEl.outerHTML : '';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'task-edit-input';
+    input.value = t.text;
+    body.innerHTML = '';
+    body.appendChild(input);
+    if (ownerEl) body.insertAdjacentHTML('beforeend', ownerHtml);
+    li.querySelector('.task-edit').style.display = 'none';
+    input.focus();
+    input.select();
+    const save = () => {
+      const newText = input.value.trim();
+      if (newText && newText !== t.text) {
+        window.socket?.emit('editTask', { taskId: t.id, text: newText });
+        // Also update personal list
+        const personal = _personalTasks.find(p => p.text === t.text);
+        if (personal) { personal.text = newText; _savePersonal(); }
+      }
+      renderGlobal();
+    };
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') save();
+      if (e.key === 'Escape') renderGlobal();
+    });
+    input.addEventListener('blur', save);
   }
 
   function escHtml(str) {
@@ -294,6 +351,11 @@
         }
       }
       renderGlobal();
+    },
+
+    onTaskEdited({ taskId, text }) {
+      const t = _globalTasks.find(x => x.id === taskId);
+      if (t) { t.text = text; renderGlobal(); }
     },
 
     onTaskDeleted({ taskId }) {

@@ -171,6 +171,7 @@
   socket.on('taskCompleted',   ({ taskId }) => window.TaskManager.onTaskCompleted({ taskId }));
   socket.on('taskUncompleted', ({ taskId }) => window.TaskManager.onTaskUncompleted({ taskId }));
   socket.on('taskDeleted',     ({ taskId }) => window.TaskManager.onTaskDeleted({ taskId }));
+  socket.on('taskEdited',      ({ taskId, text }) => window.TaskManager.onTaskEdited({ taskId, text }));
   socket.on('playerCount',   (n)          => {
     document.getElementById('player-count').textContent = `👤 ${n}`;
   });

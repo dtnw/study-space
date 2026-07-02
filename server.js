@@ -1041,6 +1041,13 @@ io.on('connection', (socket) => {
     const task = globalTasks.find(t => t.id === taskId);
     if (task && task.playerId === myClientId()) { globalTasks = globalTasks.filter(t => t.id !== taskId); saveTasks(); io.emit('taskDeleted', { taskId }); }
   });
+  socket.on('editTask', ({ taskId, text }) => {
+    if (!text || typeof text !== 'string') return;
+    const safeText = text.trim().slice(0, 200);
+    if (!safeText) return;
+    const task = globalTasks.find(t => t.id === taskId && t.playerId === myClientId());
+    if (task) { task.text = safeText; saveTasks(); io.emit('taskEdited', { taskId, text: safeText }); }
+  });
   socket.on('clearAllTasks', () => {
     const p = me(); if (!p || (p.role !== 'creator' && p.role !== 'mod')) return;
     globalTasks = []; saveTasks(); io.emit('allTasksCleared');
