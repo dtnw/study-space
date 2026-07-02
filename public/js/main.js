@@ -347,6 +347,7 @@
     }
 
     window.myRole = effectiveRole;
+    window.TaskManager?.setRole(effectiveRole);
     // Show/hide privileged UI
     document.getElementById('clear-tasks-wrap')?.classList.toggle('hidden', effectiveRole === 'regular');
     if (effectiveRole !== 'regular') window.socket?.emit('getBannedList');

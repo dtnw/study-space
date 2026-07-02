@@ -10,6 +10,7 @@
   let _globalTasks   = [];  // { id, text, playerName, playerId, completed }
   let _myPlayerId    = null;
   let _myName        = '';
+  let _myRole        = 'regular';
 
   // ── DOM helpers ────────────────────────────────────────────
   const personalList  = () => document.getElementById('personal-task-list');
@@ -23,11 +24,14 @@
     ul.innerHTML = '';
     const visible = _personalTasks;
     personalEmpty().style.display = visible.length ? 'none' : 'block';
+    let _dragSrc = null;
     visible.forEach((t) => {
       const li = document.createElement('li');
       li.className = 'task-item' + (t.completed ? ' done' : '');
       li.dataset.id = t.id;
+      li.draggable = true;
       li.innerHTML = `
+        <div class="task-drag-handle" title="Drag to reorder">⠿</div>
         <div class="task-checkbox clickable">${t.completed ? '✓' : ''}</div>
         <div class="task-body">${escHtml(t.text)}</div>
         <button class="task-edit" data-id="${t.id}" title="Edit">✎</button>
@@ -42,6 +46,28 @@
         e.stopPropagation();
         deletePersonal(t.id);
       });
+
+      li.addEventListener('dragstart', (e) => {
+        _dragSrc = t.id;
+        li.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+      });
+      li.addEventListener('dragend', () => li.classList.remove('dragging'));
+      li.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; li.classList.add('drag-over'); });
+      li.addEventListener('dragleave', () => li.classList.remove('drag-over'));
+      li.addEventListener('drop', (e) => {
+        e.preventDefault();
+        li.classList.remove('drag-over');
+        if (!_dragSrc || _dragSrc === t.id) return;
+        const fromIdx = _personalTasks.findIndex(x => x.id === _dragSrc);
+        const toIdx   = _personalTasks.findIndex(x => x.id === t.id);
+        if (fromIdx === -1 || toIdx === -1) return;
+        const [moved] = _personalTasks.splice(fromIdx, 1);
+        _personalTasks.splice(toIdx, 0, moved);
+        _savePersonal();
+        renderPersonal();
+      });
+
       ul.appendChild(li);
     });
   }
@@ -81,6 +107,8 @@
     globalEmpty().style.display = _globalTasks.length ? 'none' : 'block';
     _globalTasks.forEach((t) => {
       const isOwn = t.playerId === _myPlayerId;
+      const isPrivileged = _myRole === 'creator' || _myRole === 'mod';
+      const canDelete = isOwn || isPrivileged;
       const li = document.createElement('li');
       li.className = 'task-item' + (t.completed ? ' done' : '');
       li.dataset.id = t.id;
@@ -91,17 +119,19 @@
           <div class="task-owner">${escHtml(t.playerName)}</div>
         </div>
         ${isOwn ? `<button class="task-edit" data-id="${t.id}" title="Edit">✎</button>` : ''}
-        ${isOwn ? `<button class="task-delete" data-id="${t.id}" title="Delete">✕</button>` : ''}
+        ${canDelete ? `<button class="task-delete" data-id="${t.id}" title="Delete">✕</button>` : ''}
       `;
       if (isOwn) {
         li.querySelector('.task-checkbox').addEventListener('click', () => {
           window.socket.emit(t.completed ? 'uncompleteTask' : 'completeTask', { taskId: t.id });
         });
-        li.querySelector('.task-edit').addEventListener('click', (e) => {
+        li.querySelector('.task-edit')?.addEventListener('click', (e) => {
           e.stopPropagation();
           startEditGlobal(li, t);
         });
-        li.querySelector('.task-delete').addEventListener('click', (e) => {
+      }
+      if (canDelete) {
+        li.querySelector('.task-delete')?.addEventListener('click', (e) => {
           e.stopPropagation();
           window.socket.emit('deleteTask', { taskId: t.id });
         });
@@ -257,6 +287,11 @@
 
   // ── Public API ──────────────────────────────────────────────
   window.TaskManager = {
+    setRole(role) {
+      _myRole = role || 'regular';
+      renderGlobal();
+    },
+
     init(playerId, playerName) {
       _myPlayerId = playerId;
       _myName     = playerName;

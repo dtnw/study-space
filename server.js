@@ -1073,7 +1073,9 @@ io.on('connection', (socket) => {
   });
   socket.on('deleteTask', ({ taskId }) => {
     const rt = roomTasks(); if (!rt) return;
-    const task = rt.find(t => t.id === taskId && t.playerId === myClientId());
+    const p = me(); if (!p) return;
+    const isPrivileged = p.role === 'creator' || p.role === 'mod';
+    const task = rt.find(t => t.id === taskId && (t.playerId === myClientId() || isPrivileged));
     if (task) { R().tasks = rt.filter(t => t.id !== taskId); saveRT(); emitR('taskDeleted', { taskId }); }
   });
   socket.on('editTask', ({ taskId, text }) => {
