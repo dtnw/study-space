@@ -961,7 +961,6 @@ io.on('connection', (socket) => {
     socket.emit('spaceStatus', roomSpaceStatus[safeRoomId] || {});
     if (rs.roomLayout) socket.emit('roomLayout', rs.roomLayout);
     socket.emit('roomTasksInit', { tasks: rs.tasks || [] });
-    const cfg = ROOM_CONFIGS.find(c => c.id === safeRoomId);
     const defaultName = cfg ? cfg.name : safeRoomId;
     socket.emit('roomConfig', { spaceName: rs.config?.spaceName || defaultName });
 
