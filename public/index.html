@@ -37,7 +37,7 @@
         <button id="stop-timer-btn"  class="pixel-btn small danger">■</button>
       </div>
       <div id="header-right">
-        <span id="coin-count" class="coin-count">🪙 0</span> <span style="font-size: 14px;opacity:0.5;font-family:monospace">v3.52</span>
+        <span id="coin-count" class="coin-count">🪙 0</span> <span style="font-size: 14px;opacity:0.5;font-family:monospace">v3.54</span>
         <div class="status-block">
           <span id="status-indicator" class="status-idle">● IDLE</span>
           <div class="audio-btns">
@@ -112,6 +112,16 @@
           <button onclick="window._gameZoomReset?.()" title="Reset zoom">⊙</button>
           <button onclick="window._gameZoomOut?.()"   title="Zoom out (scroll down)">−</button>
         </div>
+
+        <!-- Mobile D-pad -->
+        <div id="dpad" class="hidden">
+          <button class="dpad-btn" id="dpad-up">▲</button>
+          <button class="dpad-btn" id="dpad-left">◀</button>
+          <button class="dpad-btn" id="dpad-right">▶</button>
+          <button class="dpad-btn" id="dpad-down">▼</button>
+        </div>
+        <!-- Mobile interact button (E key) -->
+        <button id="dpad-interact" class="dpad-btn hidden" title="Interact">✦</button>
       </div>
 
       <!-- Social Panel — RIGHT -->

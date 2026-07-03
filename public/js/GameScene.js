@@ -458,6 +458,27 @@ class GameScene extends Phaser.Scene {
       }
     });
 
+    // ── Pinch-to-zoom (mobile) ────────────────────────────
+    let _pinchDist = 0;
+    this.game.canvas.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 2) {
+        _pinchDist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+      }
+    }, { passive: true });
+    this.game.canvas.addEventListener('touchmove', (e) => {
+      if (e.touches.length !== 2 || !_pinchDist) return;
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      applyZoom(this._zoom * (dist / _pinchDist));
+      _pinchDist = dist;
+    }, { passive: true });
+    this.game.canvas.addEventListener('touchend', () => { _pinchDist = 0; }, { passive: true });
+
     // Camera follows the player
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
   }
@@ -1382,10 +1403,11 @@ class GameScene extends Phaser.Scene {
     const speed = 130;
     let vx = 0, vy = 0;
 
-    const left  = this.cursors.left.isDown  || this.wasd.A.isDown;
-    const right = this.cursors.right.isDown || this.wasd.D.isDown;
-    const up    = this.cursors.up.isDown    || this.wasd.W.isDown;
-    const down  = this.cursors.down.isDown  || this.wasd.S.isDown;
+    const vk = window._vKey || {};
+    const left  = this.cursors.left.isDown  || this.wasd.A.isDown || vk.left;
+    const right = this.cursors.right.isDown || this.wasd.D.isDown || vk.right;
+    const up    = this.cursors.up.isDown    || this.wasd.W.isDown || vk.up;
+    const down  = this.cursors.down.isDown  || this.wasd.S.isDown || vk.down;
 
     if (left)  vx = -speed;
     if (right) vx =  speed;

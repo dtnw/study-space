@@ -1712,8 +1712,48 @@
     pin?.addEventListener('click', (e) => { e.stopPropagation(); setPinned(!isPinned()); });
   }
 
+  // Auto-collapse both panels on touch devices to maximise game canvas
+  const _isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+  if (_isTouch) {
+    if (!localStorage.getItem('bh_left_panel'))  localStorage.setItem('bh_left_panel',  '1');
+    if (!localStorage.getItem('bh_right_panel')) localStorage.setItem('bh_right_panel', '1');
+  }
+
   initPanelToggle('task-panel-wrap',   'task-panel-tab',   'task-panel-pin',   'bh_left_panel',  true);
   initPanelToggle('social-panel-wrap', 'social-panel-tab', 'social-panel-pin', 'bh_right_panel', false);
+
+  // ── Mobile D-pad ──────────────────────────────────────────
+  window._vKey = { left: false, right: false, up: false, down: false };
+
+  if (_isTouch) {
+    document.getElementById('dpad')?.classList.remove('hidden');
+    document.getElementById('dpad-interact')?.classList.remove('hidden');
+  }
+
+  function _bindDpad(id, key) {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    const press   = (e) => { e.preventDefault(); window._vKey[key] = true;  btn.classList.add('pressed'); };
+    const release = (e) => { e.preventDefault(); window._vKey[key] = false; btn.classList.remove('pressed'); };
+    btn.addEventListener('touchstart',  press,   { passive: false });
+    btn.addEventListener('touchend',    release, { passive: false });
+    btn.addEventListener('touchcancel', release, { passive: false });
+    btn.addEventListener('mousedown',   press);
+    btn.addEventListener('mouseup',     release);
+    btn.addEventListener('mouseleave',  release);
+  }
+  _bindDpad('dpad-up',    'up');
+  _bindDpad('dpad-down',  'down');
+  _bindDpad('dpad-left',  'left');
+  _bindDpad('dpad-right', 'right');
+
+  // Interact button fires the E-key equivalent
+  const _interactBtn = document.getElementById('dpad-interact');
+  if (_interactBtn) {
+    const fireE = (e) => { e.preventDefault(); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'e', code: 'KeyE', bubbles: true })); };
+    _interactBtn.addEventListener('touchstart', fireE, { passive: false });
+    _interactBtn.addEventListener('mousedown',  fireE);
+  }
 
   // ── Space name inline edit (creator only) ─────────────────
   const logoEditBtn   = document.getElementById('logo-edit-btn');

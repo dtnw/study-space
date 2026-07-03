@@ -1385,6 +1385,62 @@ body:has(.modal-overlay.active) #game-container canvas { pointer-events: none; }
   font-family: sans-serif;
 }
 #zoom-controls button:hover { background: rgba(255,255,255,0.18); }
+
+/* ── Mobile D-pad ───────────────────────────────────────── */
+#dpad {
+  position: absolute;
+  bottom: 70px;
+  left: 16px;
+  width: 140px;
+  height: 140px;
+  z-index: 100;
+  touch-action: none;
+  pointer-events: none;
+}
+.dpad-btn {
+  position: absolute;
+  width: 48px;
+  height: 48px;
+  background: rgba(0,0,0,0.55);
+  border: 2px solid rgba(255,255,255,0.25);
+  border-radius: 10px;
+  color: rgba(255,255,255,0.85);
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  pointer-events: all;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background 0.1s;
+}
+.dpad-btn:active, .dpad-btn.pressed { background: rgba(155,107,219,0.55); border-color: rgba(155,107,219,0.7); }
+#dpad-up    { top: 0;    left: 46px; }
+#dpad-left  { top: 46px; left: 0;    }
+#dpad-right { top: 46px; left: 92px; }
+#dpad-down  { top: 92px; left: 46px; }
+#dpad-interact {
+  position: absolute;
+  bottom: 70px;
+  right: 16px;
+  width: 54px;
+  height: 54px;
+  font-size: 22px;
+  z-index: 100;
+}
+
+/* ── Mobile layout tweaks ───────────────────────────────── */
+@media (max-width: 700px) {
+  #header { padding: 4px 8px; gap: 6px; }
+  #header-left { gap: 4px; }
+  #logo { font-size: 9px !important; }
+  .lp-back-btn { font-size: 9px !important; }
+  #player-count { display: none; }
+  #zoom-controls { bottom: 6px; right: 6px; }
+  #zoom-controls button { width: 32px; height: 32px; font-size: 14px; }
+}
 .chat-input {
   width: 100%; font-size: 14px !important; padding: 8px 10px !important;
   background: rgba(0,0,0,0.92); border: 2px solid var(--accent);
