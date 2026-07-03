@@ -396,22 +396,47 @@ class GameScene extends Phaser.Scene {
     this.game.canvas.addEventListener('contextmenu', e => e.preventDefault());
 
     let _panActive = false;
+    let _panIsLeft = false;   // true when panning via left-button drag
     let _panStartX = 0, _panStartY = 0;
     let _camStartScrollX = 0, _camStartScrollY = 0;
+    const PAN_THRESHOLD = 6; // px before left-drag is treated as a pan
+
+    const _startPan = (pointer) => {
+      _panActive = true;
+      _panStartX = pointer.x;
+      _panStartY = pointer.y;
+      _camStartScrollX = this.cameras.main.scrollX;
+      _camStartScrollY = this.cameras.main.scrollY;
+      this.cameras.main.stopFollow();
+      this.game.canvas.style.cursor = 'grab';
+    };
 
     this.input.on('pointerdown', (pointer) => {
+      // Right / middle: start panning immediately
       if (pointer.rightButtonDown() || pointer.middleButtonDown()) {
-        _panActive = true;
+        _panIsLeft = false;
+        _startPan(pointer);
+        return;
+      }
+      // Left button: record start position; actual pan begins after threshold in pointermove
+      if (pointer.leftButtonDown() && !this.diyMode && !this.diyCreatorMode) {
+        _panIsLeft = true;
         _panStartX = pointer.x;
         _panStartY = pointer.y;
         _camStartScrollX = this.cameras.main.scrollX;
         _camStartScrollY = this.cameras.main.scrollY;
-        this.cameras.main.stopFollow();
-        this.game.canvas.style.cursor = 'grab';
       }
     });
 
     this.input.on('pointermove', (pointer) => {
+      // Left-drag threshold check — activate pan once moved enough
+      if (_panIsLeft && !_panActive && pointer.isDown) {
+        const dist = Math.hypot(pointer.x - _panStartX, pointer.y - _panStartY);
+        if (dist >= PAN_THRESHOLD) {
+          _panActive = true;
+          this.cameras.main.stopFollow();
+        }
+      }
       if (!_panActive) return;
       this.game.canvas.style.cursor = 'grabbing';
       const dx = (pointer.x - _panStartX) / this._zoom;
@@ -420,10 +445,16 @@ class GameScene extends Phaser.Scene {
     });
 
     this.input.on('pointerup', (pointer) => {
-      if (_panActive && !pointer.rightButtonDown() && !pointer.middleButtonDown()) {
+      const leftReleased  = !pointer.leftButtonDown()   && _panIsLeft;
+      const otherReleased = !pointer.rightButtonDown()  && !pointer.middleButtonDown() && !_panIsLeft;
+      if (_panActive && (leftReleased || otherReleased)) {
         _panActive = false;
+        _panIsLeft = false;
         this.game.canvas.style.cursor = '';
         this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
+      } else if (_panIsLeft && !_panActive) {
+        // Short tap — not a drag, reset tracking
+        _panIsLeft = false;
       }
     });
 
