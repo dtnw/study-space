@@ -33,7 +33,7 @@
         <button id="stop-timer-btn"  class="pixel-btn small danger">■</button>
       </div>
       <div id="header-right">
-        <span id="coin-count" class="coin-count">🪙 0</span> <span style="font-size: 14px;opacity:0.5;font-family:monospace">v3.49</span>
+        <span id="coin-count" class="coin-count">🪙 0</span> <span style="font-size: 14px;opacity:0.5;font-family:monospace">v3.50</span>
         <div class="status-block">
           <span id="status-indicator" class="status-idle">● IDLE</span>
           <div class="audio-btns">
@@ -51,12 +51,14 @@
     <div id="main-layout">
 
       <!-- Task Panel — LEFT -->
+      <div id="task-panel-wrap" class="panel-wrap left-wrap">
       <aside id="task-panel" class="task-panel">
 
         <!-- ── My Tasks ── -->
         <div class="task-section">
           <div class="panel-header">
             <span>📋 MY TASKS</span>
+            <button id="task-panel-pin" class="panel-pin-btn" title="Pin panel open">📌</button>
             <button id="add-task-btn" class="pixel-btn small">+</button>
           </div>
           <ul id="personal-task-list" class="task-list"></ul>
@@ -83,6 +85,8 @@
         </div>
 
       </aside>
+      <button id="task-panel-tab" class="panel-side-tab" title="Collapse task panel">◀</button>
+      </div>
 
       <!-- Game canvas — MIDDLE -->
       <div id="game-wrap">
@@ -102,9 +106,12 @@
       </div>
 
       <!-- Social Panel — RIGHT -->
+      <div id="social-panel-wrap" class="panel-wrap right-wrap">
+      <button id="social-panel-tab" class="panel-side-tab" title="Collapse social panel">▶</button>
       <aside id="social-panel">
         <div class="panel-header">
           <span>👥 SOCIAL</span>
+          <button id="social-panel-pin" class="panel-pin-btn" title="Pin panel open">📌</button>
           <button id="social-toggle-btn" class="pixel-btn small">▾</button>
         </div>
         <div id="social-body">
@@ -173,6 +180,7 @@
                  placeholder="Type a message…" maxlength="80" autocomplete="off" />
         </div>
       </aside>
+      </div>
 
     </div>
 

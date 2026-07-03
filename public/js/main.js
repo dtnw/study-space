@@ -1663,6 +1663,47 @@
     btn.textContent = collapsed ? '▸' : '▾';
   });
 
+  // ── Panel collapse / pin ──────────────────────────────────
+  function initPanelToggle(wrapId, tabId, pinId, storeKey, isLeft) {
+    const wrap = document.getElementById(wrapId);
+    const tab  = document.getElementById(tabId);
+    const pin  = document.getElementById(pinId);
+    if (!wrap || !tab) return;
+
+    const isCollapsed = () => wrap.classList.contains('collapsed');
+    const isPinned    = () => localStorage.getItem(storeKey + '_pin') === '1';
+
+    function updateTab() {
+      tab.textContent = isLeft
+        ? (isCollapsed() ? '▶' : '◀')
+        : (isCollapsed() ? '◀' : '▶');
+      tab.title = isCollapsed() ? 'Expand panel' : 'Collapse panel';
+    }
+    function setCollapsed(v) {
+      wrap.classList.toggle('collapsed', v);
+      localStorage.setItem(storeKey, v ? '1' : '0');
+      updateTab();
+    }
+    function setPinned(v) {
+      localStorage.setItem(storeKey + '_pin', v ? '1' : '0');
+      if (pin) { pin.classList.toggle('pinned', v); pin.title = v ? 'Unpin panel' : 'Pin panel open'; }
+    }
+
+    // Restore saved state
+    if (localStorage.getItem(storeKey) === '1') wrap.classList.add('collapsed');
+    setPinned(isPinned());
+    updateTab();
+
+    tab.addEventListener('click', () => {
+      if (!isCollapsed() && isPinned()) return;
+      setCollapsed(!isCollapsed());
+    });
+    pin?.addEventListener('click', (e) => { e.stopPropagation(); setPinned(!isPinned()); });
+  }
+
+  initPanelToggle('task-panel-wrap',   'task-panel-tab',   'task-panel-pin',   'bh_left_panel',  true);
+  initPanelToggle('social-panel-wrap', 'social-panel-tab', 'social-panel-pin', 'bh_right_panel', false);
+
   document.getElementById('chat-text-input')?.addEventListener('keydown', (e) => {
     e.stopPropagation();
     if (e.key === 'Enter') window.gameScene?._sendChat(e.target.value);

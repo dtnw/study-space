@@ -176,6 +176,47 @@ html, body {
   gap: 0;
 }
 
+/* ── Panel wrappers (collapsible) ──────────────────────── */
+.panel-wrap {
+  display: flex;
+  flex-direction: row;
+  flex-shrink: 0;
+}
+.right-wrap { flex-direction: row; }
+
+.panel-side-tab {
+  width: 18px;
+  min-width: 18px;
+  background: var(--panel-bg);
+  border: none;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.45;
+  transition: opacity 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+.panel-side-tab:hover { opacity: 1; background: var(--panel-border); }
+.left-wrap  .panel-side-tab { border-left:  2px solid var(--panel-border); }
+.right-wrap .panel-side-tab { border-right: 2px solid var(--panel-border); }
+
+.panel-pin-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  opacity: 0.3;
+  padding: 0 2px;
+  line-height: 1;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+.panel-pin-btn:hover  { opacity: 0.7; }
+.panel-pin-btn.pinned { opacity: 1; }
+
 /* ── Task Panel — LEFT ─── */
 .task-panel {
   width: 220px;
@@ -185,7 +226,9 @@ html, body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  transition: width 0.2s ease;
 }
+.left-wrap.collapsed .task-panel  { width: 0; border-right: none; }
 
 /* ── Social Panel — RIGHT ─── */
 #social-panel {
@@ -196,7 +239,9 @@ html, body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  transition: width 0.2s ease;
 }
+.right-wrap.collapsed #social-panel { width: 0; border-left: none; }
 #social-panel #social-body {
   flex: 1;
   overflow-y: auto;
