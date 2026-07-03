@@ -168,6 +168,16 @@
   socket.on('roomTasksInit', ({ tasks }) => {
     window.TaskManager.onInit(tasks);
   });
+
+  function applySpaceName(name) {
+    const logo = document.getElementById('logo');
+    if (logo) logo.textContent = '🌷 ' + name;
+    document.title = name + ' — Belong Here 🌷';
+  }
+  socket.on('roomConfig', ({ spaceName }) => {
+    if (spaceName) applySpaceName(spaceName);
+  });
+  socket.on('spaceNameUpdated', ({ name }) => applySpaceName(name));
   socket.on('taskAdded',     (task)       => window.TaskManager.onTaskAdded(task));
   socket.on('taskCompleted',   ({ taskId }) => window.TaskManager.onTaskCompleted({ taskId }));
   socket.on('taskUncompleted', ({ taskId }) => window.TaskManager.onTaskUncompleted({ taskId }));
@@ -350,6 +360,7 @@
     window.TaskManager?.setRole(effectiveRole);
     // Show/hide privileged UI
     document.getElementById('clear-tasks-wrap')?.classList.toggle('hidden', effectiveRole === 'regular');
+    document.getElementById('logo-edit-btn')?.classList.toggle('hidden', effectiveRole !== 'creator');
     if (effectiveRole !== 'regular') window.socket?.emit('getBannedList');
     window._refreshSpacesPanel?.();
     // DIY panel is visible to everyone — non-creators can play locally but saves are blocked
@@ -1703,6 +1714,32 @@
 
   initPanelToggle('task-panel-wrap',   'task-panel-tab',   'task-panel-pin',   'bh_left_panel',  true);
   initPanelToggle('social-panel-wrap', 'social-panel-tab', 'social-panel-pin', 'bh_right_panel', false);
+
+  // ── Space name inline edit (creator only) ─────────────────
+  const logoEditBtn   = document.getElementById('logo-edit-btn');
+  const logoEditInput = document.getElementById('logo-edit-input');
+  const logoSpan      = document.getElementById('logo');
+  logoEditBtn?.addEventListener('click', () => {
+    const current = (logoSpan?.textContent || '').replace(/^🌷\s*/, '');
+    if (logoEditInput) logoEditInput.value = current;
+    logoSpan?.classList.add('hidden');
+    logoEditBtn?.classList.add('hidden');
+    logoEditInput?.classList.remove('hidden');
+    logoEditInput?.focus();
+    logoEditInput?.select();
+  });
+  const _saveSpaceName = () => {
+    const val = logoEditInput?.value.trim();
+    logoEditInput?.classList.add('hidden');
+    logoSpan?.classList.remove('hidden');
+    logoEditBtn?.classList.remove('hidden');
+    if (val) window.socket?.emit('setSpaceName', { name: val });
+  };
+  logoEditInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); _saveSpaceName(); }
+    if (e.key === 'Escape') { logoEditInput.classList.add('hidden'); logoSpan?.classList.remove('hidden'); logoEditBtn?.classList.remove('hidden'); }
+  });
+  logoEditInput?.addEventListener('blur', _saveSpaceName);
 
   document.getElementById('chat-text-input')?.addEventListener('keydown', (e) => {
     e.stopPropagation();

@@ -367,19 +367,65 @@ class GameScene extends Phaser.Scene {
     this._zoom = 1.5;
     this.cameras.main.setZoom(this._zoom);
 
-    // Scroll wheel zoom
-    this.input.on('wheel', (_ptr, _objs, _dx, deltaY) => {
-      this._zoom = Phaser.Math.Clamp(this._zoom - deltaY * 0.001, 0.6, 2.5);
+    const ZOOM_MIN = 0.4, ZOOM_MAX = 3.0;
+    const applyZoom = (z) => {
+      this._zoom = Phaser.Math.Clamp(z, ZOOM_MIN, ZOOM_MAX);
       this.cameras.main.setZoom(this._zoom);
+    };
+
+    // Scroll wheel zoom — faster step
+    this.input.on('wheel', (_ptr, _objs, _dx, deltaY) => {
+      applyZoom(this._zoom - deltaY * 0.003);
     });
 
     // +/= to zoom in, - to zoom out
     const plusKey  = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.PLUS,  false);
     const equalKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.EQUALS,false);
     const minusKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.MINUS, false);
-    plusKey.on('down',  () => { this._zoom = Phaser.Math.Clamp(this._zoom + 0.15, 0.6, 2.5); this.cameras.main.setZoom(this._zoom); });
-    equalKey.on('down', () => { this._zoom = Phaser.Math.Clamp(this._zoom + 0.15, 0.6, 2.5); this.cameras.main.setZoom(this._zoom); });
-    minusKey.on('down', () => { this._zoom = Phaser.Math.Clamp(this._zoom - 0.15, 0.6, 2.5); this.cameras.main.setZoom(this._zoom); });
+    plusKey.on('down',  () => applyZoom(this._zoom + 0.2));
+    equalKey.on('down', () => applyZoom(this._zoom + 0.2));
+    minusKey.on('down', () => applyZoom(this._zoom - 0.2));
+
+    // HUD zoom buttons wired in index.html
+    window._gameZoomIn  = () => applyZoom(this._zoom + 0.2);
+    window._gameZoomOut = () => applyZoom(this._zoom - 0.2);
+    window._gameZoomReset = () => applyZoom(1.5);
+
+    // ── Right-click / middle-mouse drag to pan ─────────────
+    // Prevents context menu on canvas
+    this.game.canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+    let _panActive = false;
+    let _panStartX = 0, _panStartY = 0;
+    let _camStartScrollX = 0, _camStartScrollY = 0;
+
+    this.input.on('pointerdown', (pointer) => {
+      if (pointer.rightButtonDown() || pointer.middleButtonDown()) {
+        _panActive = true;
+        _panStartX = pointer.x;
+        _panStartY = pointer.y;
+        _camStartScrollX = this.cameras.main.scrollX;
+        _camStartScrollY = this.cameras.main.scrollY;
+        this.cameras.main.stopFollow();
+        this.game.canvas.style.cursor = 'grab';
+      }
+    });
+
+    this.input.on('pointermove', (pointer) => {
+      if (!_panActive) return;
+      this.game.canvas.style.cursor = 'grabbing';
+      const dx = (pointer.x - _panStartX) / this._zoom;
+      const dy = (pointer.y - _panStartY) / this._zoom;
+      this.cameras.main.setScroll(_camStartScrollX - dx, _camStartScrollY - dy);
+    });
+
+    this.input.on('pointerup', (pointer) => {
+      if (_panActive && !pointer.rightButtonDown() && !pointer.middleButtonDown()) {
+        _panActive = false;
+        this.game.canvas.style.cursor = '';
+        this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
+      }
+    });
 
     // Camera follows the player
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1);

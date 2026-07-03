@@ -105,6 +105,22 @@ function saveTasks() {
   } catch (e) { console.warn('Could not save tasks:', e.message); }
 }
 
+// ── Per-room config (space name, etc.) ───────────────────────────────────────
+function roomConfigPath(roomId) { return path.join(__dirname, 'data', `${roomId}-config.json`); }
+function loadRoomConfig(roomId) {
+  try {
+    const p = roomConfigPath(roomId);
+    if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, 'utf8'));
+  } catch(e) {}
+  return {};
+}
+function saveRoomConfig(roomId, config) {
+  try {
+    fs.mkdirSync(path.dirname(roomConfigPath(roomId)), { recursive: true });
+    fs.writeFileSync(roomConfigPath(roomId), JSON.stringify(config, null, 2));
+  } catch(e) {}
+}
+
 // ── Per-room task persistence ─────────────────────────────────────────────────
 function roomTasksPath(roomId) {
   return path.join(__dirname, 'data', `${roomId}-tasks.json`);
@@ -184,6 +200,7 @@ function getRoomState(roomId) {
       rolesData:     loadRolesForRoom(roomId),
       activeCalls:   {},
       tasks:         loadRoomTasks(roomId),
+      config:        loadRoomConfig(roomId),
     });
   }
   return roomState.get(roomId);
@@ -603,9 +620,10 @@ app.get('/api/spaces', (req, res) => {
   const spaces = ROOM_CONFIGS.filter(cfg => !cfg.hidden).map(cfg => {
     const rs  = getRoomState(cfg.id);
     const st  = roomSpaceStatus[cfg.id] || {};
+    const spaceName = rs.config?.spaceName || cfg.name;
     return {
       id:           cfg.id,
-      name:         cfg.name,
+      name:         spaceName,
       twitchLogin:  cfg.creatorLogin,
       description:  '',
       roomPath:     cfg.path,
@@ -943,6 +961,9 @@ io.on('connection', (socket) => {
     socket.emit('spaceStatus', roomSpaceStatus[safeRoomId] || {});
     if (rs.roomLayout) socket.emit('roomLayout', rs.roomLayout);
     socket.emit('roomTasksInit', { tasks: rs.tasks || [] });
+    const cfg = ROOM_CONFIGS.find(c => c.id === safeRoomId);
+    const defaultName = cfg ? cfg.name : safeRoomId;
+    socket.emit('roomConfig', { spaceName: rs.config?.spaceName || defaultName });
 
     socket.emit('existingPlayers', Object.values(rs.players)
       .filter(p => p.id !== socket.id)
@@ -1104,6 +1125,20 @@ io.on('connection', (socket) => {
     const removed = rt.filter(t => !t.createdAt || new Date(t.createdAt).getTime() < cutoff).map(t => t.id);
     R().tasks = rt.filter(t => t.createdAt && new Date(t.createdAt).getTime() >= cutoff); saveRT();
     emitR('tasksRemoved', { taskIds: removed });
+  });
+
+  // ── Space name ────────────────────────────────────────────
+  socket.on('setSpaceName', ({ name }) => {
+    const p = me(); if (!p || p.role !== 'creator') return;
+    const rid = socket.data.roomId; if (!rid) return;
+    const safeName = sanitise(name, 60); if (!safeName) return;
+    const rs = R();
+    rs.config = rs.config || {};
+    rs.config.spaceName = safeName;
+    saveRoomConfig(rid, rs.config);
+    const cfgEntry = ROOM_CONFIGS.find(c => c.id === rid);
+    if (cfgEntry) cfgEntry.name = safeName;
+    emitR('spaceNameUpdated', { name: safeName });
   });
 
   // ── Status icon ───────────────────────────────────────────
