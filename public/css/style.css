@@ -1421,15 +1421,44 @@ body:has(.modal-overlay.active) #game-container canvas { pointer-events: none; }
 #dpad-left  { top: 46px; left: 0;    }
 #dpad-right { top: 46px; left: 92px; }
 #dpad-down  { top: 92px; left: 46px; }
-#dpad-interact {
+/* ── Mobile A/B action buttons (Game Boy style) ─────────── */
+#ab-buttons {
   position: absolute;
-  bottom: 70px;
+  bottom: 60px;
   right: 16px;
+  width: 130px;
+  height: 96px;
+  z-index: 100;
+  pointer-events: none;
+}
+.gb-btn {
+  position: absolute;
   width: 54px;
   height: 54px;
-  font-size: 22px;
-  z-index: 100;
+  border-radius: 50%;
+  background: rgba(200,60,110,0.5);
+  border: 2px solid rgba(255,255,255,0.25);
+  color: rgba(255,255,255,0.9);
+  font-family: 'Press Start 2P', monospace;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  pointer-events: all;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: background 0.1s, transform 0.1s;
 }
+.gb-btn:active, .gb-btn.pressed {
+  background: rgba(230,80,140,0.78);
+  border-color: rgba(255,255,255,0.5);
+  transform: scale(0.92);
+}
+/* Diagonal Game Boy layout: A lower-right, B upper-left */
+#btn-a { right: 0;    bottom: 30px; }
+#btn-b { right: 60px; bottom: 0;    }
 
 /* ── Mobile layout tweaks ───────────────────────────────── */
 @media (max-width: 700px) {

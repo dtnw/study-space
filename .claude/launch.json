@@ -7,6 +7,13 @@
       "runtimeArgs": ["server.js"],
       "port": 3000,
       "autoPort": true
+    },
+    {
+      "name": "campus-events",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["C:\\Users\\derby\\Desktop\\CampusEvents\\server.js"],
+      "port": 4100,
+      "autoPort": true
     }
   ]
 }

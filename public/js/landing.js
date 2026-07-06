@@ -252,6 +252,7 @@ function _showSignInPrompt(targetPath) {
       <h2 class="lp-modal-title">JOIN THE SPACE</h2>
       <p class="lp-modal-sub">Sign in to save your coins, tasks, and friends.</p>
       <button class="lp-twitch-signin-btn" id="sp-twitch-btn" style="display:block;width:100%;text-align:center;margin-bottom:10px;border:none;cursor:pointer;font-family:var(--font)">🟣 Sign in with Twitch</button>
+      <button class="lp-google-signin-btn" id="sp-google-btn" style="display:block;width:100%;text-align:center;margin-bottom:16px;border:none;cursor:pointer;font-family:var(--font)">🔵 Sign in with Google</button>
 
       <div style="text-align:center">
         <a href="#" class="lp-guest-link" id="sp-guest-link">Continue as guest →</a>

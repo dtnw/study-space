@@ -1722,12 +1722,16 @@
   initPanelToggle('task-panel-wrap',   'task-panel-tab',   'task-panel-pin',   'bh_left_panel',  true);
   initPanelToggle('social-panel-wrap', 'social-panel-tab', 'social-panel-pin', 'bh_right_panel', false);
 
-  // ── Mobile D-pad ──────────────────────────────────────────
+  // ── Mobile controls (D-pad + A/B buttons) ─────────────────
+  // Only show on real touch-primary devices (phones/tablets), NOT on
+  // desktop touchscreens — those report a fine, hover-capable primary
+  // pointer even though maxTouchPoints > 0.
+  const _isMobile = window.matchMedia?.('(pointer: coarse) and (hover: none)').matches || false;
   window._vKey = { left: false, right: false, up: false, down: false };
 
-  if (_isTouch) {
+  if (_isMobile) {
     document.getElementById('dpad')?.classList.remove('hidden');
-    document.getElementById('dpad-interact')?.classList.remove('hidden');
+    document.getElementById('ab-buttons')?.classList.remove('hidden');
   }
 
   function _bindDpad(id, key) {
@@ -1747,13 +1751,25 @@
   _bindDpad('dpad-left',  'left');
   _bindDpad('dpad-right', 'right');
 
-  // Interact button fires the E-key equivalent
-  const _interactBtn = document.getElementById('dpad-interact');
-  if (_interactBtn) {
-    const fireE = (e) => { e.preventDefault(); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'e', code: 'KeyE', bubbles: true })); };
-    _interactBtn.addEventListener('touchstart', fireE, { passive: false });
-    _interactBtn.addEventListener('mousedown',  fireE);
+  // A / B action buttons (Game Boy style): A = interact (E), B = talk (T)
+  function _bindActionBtn(id, keyChar, code) {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    const fire = (e) => {
+      e.preventDefault();
+      btn.classList.add('pressed');
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: keyChar, code, bubbles: true }));
+    };
+    const release = () => btn.classList.remove('pressed');
+    btn.addEventListener('touchstart', fire,    { passive: false });
+    btn.addEventListener('touchend',   release, { passive: false });
+    btn.addEventListener('touchcancel', release,{ passive: false });
+    btn.addEventListener('mousedown',  fire);
+    btn.addEventListener('mouseup',    release);
+    btn.addEventListener('mouseleave', release);
   }
+  _bindActionBtn('btn-a', 'e', 'KeyE');
+  _bindActionBtn('btn-b', 't', 'KeyT');
 
   // ── Space name inline edit (creator only) ─────────────────
   const logoEditBtn   = document.getElementById('logo-edit-btn');

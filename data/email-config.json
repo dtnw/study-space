@@ -1,0 +1,7 @@
+{
+  "host": "smtp.gmail.com",
+  "port": 587,
+  "user": "YOUR_GMAIL@gmail.com",
+  "pass": "YOUR_GMAIL_APP_PASSWORD",
+  "to": "whatsappderby@gmail.com"
+}
