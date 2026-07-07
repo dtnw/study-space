@@ -1751,25 +1751,38 @@
   _bindDpad('dpad-left',  'left');
   _bindDpad('dpad-right', 'right');
 
-  // A / B action buttons (Game Boy style): A = interact (E), B = talk (T)
-  function _bindActionBtn(id, keyChar, code) {
+  // A / B action buttons (Game Boy style): A = interact (E), B = talk (T).
+  // Phaser matches keys by event.keyCode, which is 0 on events built from the
+  // KeyboardEvent constructor — so we define keyCode/which explicitly and
+  // dispatch on window (Phaser's default keyboard target).
+  function _synthKey(type, keyChar, code, keyCode) {
+    const ev = new KeyboardEvent(type, { key: keyChar, code, bubbles: true });
+    Object.defineProperty(ev, 'keyCode', { get: () => keyCode });
+    Object.defineProperty(ev, 'which',   { get: () => keyCode });
+    window.dispatchEvent(ev);
+  }
+  function _bindActionBtn(id, keyChar, code, keyCode) {
     const btn = document.getElementById(id);
     if (!btn) return;
-    const fire = (e) => {
+    const press = (e) => {
       e.preventDefault();
       btn.classList.add('pressed');
-      document.dispatchEvent(new KeyboardEvent('keydown', { key: keyChar, code, bubbles: true }));
+      _synthKey('keydown', keyChar, code, keyCode);
     };
-    const release = () => btn.classList.remove('pressed');
-    btn.addEventListener('touchstart', fire,    { passive: false });
-    btn.addEventListener('touchend',   release, { passive: false });
-    btn.addEventListener('touchcancel', release,{ passive: false });
-    btn.addEventListener('mousedown',  fire);
-    btn.addEventListener('mouseup',    release);
-    btn.addEventListener('mouseleave', release);
+    const release = (e) => {
+      if (e) e.preventDefault();
+      btn.classList.remove('pressed');
+      _synthKey('keyup', keyChar, code, keyCode);
+    };
+    btn.addEventListener('touchstart',  press,   { passive: false });
+    btn.addEventListener('touchend',    release, { passive: false });
+    btn.addEventListener('touchcancel', release, { passive: false });
+    btn.addEventListener('mousedown',   press);
+    btn.addEventListener('mouseup',     release);
+    btn.addEventListener('mouseleave',  release);
   }
-  _bindActionBtn('btn-a', 'e', 'KeyE');
-  _bindActionBtn('btn-b', 't', 'KeyT');
+  _bindActionBtn('btn-a', 'e', 'KeyE', 69);
+  _bindActionBtn('btn-b', 't', 'KeyT', 84);
 
   // ── Space name inline edit (creator only) ─────────────────
   const logoEditBtn   = document.getElementById('logo-edit-btn');
