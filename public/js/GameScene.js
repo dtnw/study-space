@@ -364,10 +364,24 @@ class GameScene extends Phaser.Scene {
     }
 
     // ── Zoom controls ─────────────────────────────────────
-    this._zoom = 1.5;
+    // Mobile screens squeeze the 1100px canvas into ~380px, so the default
+    // desktop zoom looks tiny — start much closer in on touch devices.
+    const _isMobile = window.matchMedia?.('(pointer: coarse) and (hover: none)').matches || false;
+    const DEFAULT_ZOOM = _isMobile ? 2.8 : 1.5;
+    this._eLabel = _isMobile ? 'A' : 'E';
+    this._zoom = DEFAULT_ZOOM;
     this.cameras.main.setZoom(this._zoom);
 
-    const ZOOM_MIN = 0.4, ZOOM_MAX = 3.0;
+    // On mobile the action prompts are triggered by the A button, not E
+    if (_isMobile) {
+      ['interaction-prompt', 'stand-prompt', 'cook-prompt', 'coffee-prompt',
+       'laundry-prompt', 'workout-prompt', 'washup-prompt'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = el.textContent.replace('[E]', '[A]');
+      });
+    }
+
+    const ZOOM_MIN = 0.4, ZOOM_MAX = 4.0;
     const applyZoom = (z) => {
       this._zoom = Phaser.Math.Clamp(z, ZOOM_MIN, ZOOM_MAX);
       this.cameras.main.setZoom(this._zoom);
@@ -389,7 +403,7 @@ class GameScene extends Phaser.Scene {
     // HUD zoom buttons wired in index.html
     window._gameZoomIn  = () => applyZoom(this._zoom + 0.2);
     window._gameZoomOut = () => applyZoom(this._zoom - 0.2);
-    window._gameZoomReset = () => applyZoom(1.5);
+    window._gameZoomReset = () => applyZoom(DEFAULT_ZOOM);
 
     // ── Right-click / middle-mouse drag to pan ─────────────
     // Prevents context menu on canvas
@@ -1569,20 +1583,21 @@ class GameScene extends Phaser.Scene {
     const wantSit     = !this.isSitting && !busyZone && !!this.nearestChair;
     const wantStand   = this.isSitting;
 
+    const K = this._eLabel || 'E';
     if (wantSit && this.nearestChair?.type === 'dining') {
-      sitEl.textContent = '[E] Sit & Eat';
+      sitEl.textContent = `[${K}] Sit & Eat`;
     } else if (wantSit && this.nearestChair?.type === 'beanbag') {
-      sitEl.textContent = '[E] Chill Out';
+      sitEl.textContent = `[${K}] Chill Out`;
     } else if (wantSit && this.nearestChair?.type === 'sofa') {
-      sitEl.textContent = '[E] Lounge';
+      sitEl.textContent = `[${K}] Lounge`;
     } else if (wantSit && this.nearestChair?.type === 'piano') {
-      sitEl.textContent = '[E] Play Piano';
+      sitEl.textContent = `[${K}] Play Piano`;
     } else if (wantSit) {
-      sitEl.textContent = '[E] Sit Down';
+      sitEl.textContent = `[${K}] Sit Down`;
     }
 
     if (cookEl) {
-      cookEl.textContent = wantStop ? '[E] Stop Cooking' : '[E] Start Cooking';
+      cookEl.textContent = wantStop ? `[${K}] Stop Cooking` : `[${K}] Start Cooking`;
       const showCook = wantCook || wantStop;
       const cookShown = !cookEl.classList.contains('hidden');
       if (showCook !== cookShown) cookEl.classList.toggle('hidden', !showCook);
@@ -1594,21 +1609,21 @@ class GameScene extends Phaser.Scene {
     }
 
     if (laundryEl) {
-      laundryEl.textContent = wantStopLaundry ? '[E] Stop Laundry' : '[E] Start Laundry';
+      laundryEl.textContent = wantStopLaundry ? `[${K}] Stop Laundry` : `[${K}] Start Laundry`;
       const showLaundry = wantLaundry || wantStopLaundry;
       const laundryShown = !laundryEl.classList.contains('hidden');
       if (showLaundry !== laundryShown) laundryEl.classList.toggle('hidden', !showLaundry);
     }
 
     if (workoutEl) {
-      workoutEl.textContent = wantStopWorkout ? '[E] Stop Working Out' : '[E] Work Out';
+      workoutEl.textContent = wantStopWorkout ? `[${K}] Stop Working Out` : `[${K}] Work Out`;
       const showWorkout = wantWorkout || wantStopWorkout;
       const workoutShown = !workoutEl.classList.contains('hidden');
       if (showWorkout !== workoutShown) workoutEl.classList.toggle('hidden', !showWorkout);
     }
 
     if (washupEl) {
-      washupEl.textContent = wantStopWashUp ? '[E] Stop Washing Up' : '[E] Wash Up';
+      washupEl.textContent = wantStopWashUp ? `[${K}] Stop Washing Up` : `[${K}] Wash Up`;
       const showWashUp = wantWashUp || wantStopWashUp;
       const washupShown = !washupEl.classList.contains('hidden');
       if (showWashUp !== washupShown) washupEl.classList.toggle('hidden', !showWashUp);
