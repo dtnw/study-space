@@ -359,8 +359,13 @@ let twitchToken = loadTwitchToken();
 
 const GOOGLE_CONFIG_PATH = path.join(__dirname, 'data', 'google-config.json');
 function loadGoogleConfig() {
-  try { if (fs.existsSync(GOOGLE_CONFIG_PATH)) return JSON.parse(fs.readFileSync(GOOGLE_CONFIG_PATH, 'utf8')); } catch(e) {}
-  return { clientId: '', clientSecret: '', redirectUri: 'http://localhost:3000/auth/google/callback' };
+  let cfg = { clientId: '', clientSecret: '', redirectUri: 'https://belonghere.cc/auth/google/callback' };
+  try { if (fs.existsSync(GOOGLE_CONFIG_PATH)) cfg = { ...cfg, ...JSON.parse(fs.readFileSync(GOOGLE_CONFIG_PATH, 'utf8')) }; } catch(e) {}
+  // Env vars (e.g. Railway) take priority so real secrets never live in the repo
+  if (process.env.GOOGLE_CLIENT_ID)     cfg.clientId     = process.env.GOOGLE_CLIENT_ID;
+  if (process.env.GOOGLE_CLIENT_SECRET) cfg.clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  if (process.env.GOOGLE_REDIRECT_URI)  cfg.redirectUri  = process.env.GOOGLE_REDIRECT_URI;
+  return cfg;
 }
 let googleCfg = loadGoogleConfig();
 
