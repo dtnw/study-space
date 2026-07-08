@@ -2,5 +2,5 @@
   "_instructions": "Register your app at https://console.cloud.google.com — enable Google OAuth 2.0, add the redirectUri below as an Authorized redirect URI in your OAuth 2.0 Client",
   "clientId": "",
   "clientSecret": "",
-  "redirectUri": "https://study-space-production.up.railway.app/auth/google/callback"
+  "redirectUri": "https://belonghere.cc/auth/google/callback"
 }

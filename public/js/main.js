@@ -149,6 +149,17 @@
       twitchLogin: payload.twitchLogin, roomId: payload.roomId,
       startX: p?.x, startY: p?.y,
     });
+
+    // A redeploy restarts the server and wipes in-memory seat/status state,
+    // which would boot seated players and free their chairs. We still remember
+    // what we were doing client-side (the page never reloaded), so re-send it
+    // right after re-joining to re-register our seat and status with the server.
+    if (gs?.isSitting && gs.currentChair) {
+      socket.emit('sitDown', { chairId: gs.currentChair.id, side: gs.currentChair.side });
+    }
+    if (gs?._currentStatusIcon) {
+      socket.emit('playerStatusIcon', { type: gs._currentStatusIcon });
+    }
   });
 
   // TEMPORARY: restrict the header "Watch Live" badge to the room creator only.

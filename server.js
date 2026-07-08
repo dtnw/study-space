@@ -55,6 +55,31 @@ function checkAdmin(req, res) {
 }
 
 const app = express();
+app.set('trust proxy', 1); // Railway terminates TLS at a proxy — needed for correct req.protocol/host
+
+// ── Canonical domain redirect ──────────────────────────────
+// Direct links, bookmarks, or an old OAuth callback can leave users on the raw
+// *.railway.app subdomain. Funnel real browser page loads onto the canonical
+// custom domain so users don't get stuck there. Deliberately skips OAuth
+// callbacks, API calls, the Stripe webhook, and socket.io traffic.
+const CANONICAL_HOST = (process.env.CANONICAL_HOST || 'belonghere.cc').toLowerCase();
+app.use((req, res, next) => {
+  const host = (req.get('host') || '').toLowerCase();
+  if (
+    host &&
+    host !== CANONICAL_HOST &&
+    host.endsWith('.railway.app') &&
+    (req.method === 'GET' || req.method === 'HEAD') &&
+    (req.headers.accept || '').includes('text/html') &&
+    !req.path.startsWith('/auth/') &&
+    !req.path.startsWith('/api/') &&
+    !req.path.startsWith('/socket.io/')
+  ) {
+    return res.redirect(301, `https://${CANONICAL_HOST}${req.originalUrl}`);
+  }
+  next();
+});
+
 const DATA_PATH  = path.join(__dirname, 'data', 'tasks.json');
 const TWITCH_CONFIG_PATH = path.join(__dirname, 'data', 'twitch-config.json');
 const TWITCH_TOKEN_PATH  = path.join(__dirname, 'data', 'twitch-token.json');
@@ -320,7 +345,7 @@ function saveStreamerInterest(list) {
 // ── Twitch integration ────────────────────────────────────
 function loadTwitchConfig() {
   try { if (fs.existsSync(TWITCH_CONFIG_PATH)) return JSON.parse(fs.readFileSync(TWITCH_CONFIG_PATH, 'utf8')); } catch(e) {}
-  return { clientId: 'fxqfxb53bn48lhba6t8bt3bpi0o2h3', clientSecret: 'r5dfve4346jgu4k7mbxnh0x41bp7tp', redirectUri: 'https://study-space-production.up.railway.app/auth/twitch/callback', creatorLogin: 'derbysaren' };
+  return { clientId: 'fxqfxb53bn48lhba6t8bt3bpi0o2h3', clientSecret: 'r5dfve4346jgu4k7mbxnh0x41bp7tp', redirectUri: 'https://belonghere.cc/auth/twitch/callback', creatorLogin: 'derbysaren' };
 }
 function loadTwitchToken() {
   try { if (fs.existsSync(TWITCH_TOKEN_PATH)) return JSON.parse(fs.readFileSync(TWITCH_TOKEN_PATH, 'utf8')); } catch(e) {}

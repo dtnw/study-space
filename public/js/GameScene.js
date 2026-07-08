@@ -1512,6 +1512,7 @@ class GameScene extends Phaser.Scene {
   // Show/hide status icon above own player's head; broadcasts change to others
   setStatusIcon(type) {
     if (!this.statusIcon) return;
+    this._currentStatusIcon = type || null; // remembered so we can restore it after a reconnect
     if (this._iconTween) { this._iconTween.stop(); this._iconTween = null; }
     this._iconYOffset = 0;
 

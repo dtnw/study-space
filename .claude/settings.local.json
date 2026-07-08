@@ -49,7 +49,12 @@
       "Bash(curl -s \"https://api.github.com/repos/dtnw/live-on-campus-au/pulls/2\")",
       "Bash(curl -s \"https://api.github.com/repos/dtnw/live-on-campus-au/pulls/1\")",
       "Bash(node -e \"const e=require\\('./data/events.json'\\); console.log\\('count:',e.length\\); console.log\\('titles:'\\); e.forEach\\(x=>console.log\\(' -',x.title, x.title.startsWith\\('[DEMO]'\\)?'\\(already prefixed\\)':''\\)\\)\")",
-      "Bash(node \"/c/Users/derby/AppData/Local/Temp/claude/C--Users-derby-Desktop-The-Game/4b648571-a7d2-418f-bcbc-d53c9333e348/scratchpad/import-events.js\")"
+      "Bash(node \"/c/Users/derby/AppData/Local/Temp/claude/C--Users-derby-Desktop-The-Game/4b648571-a7d2-418f-bcbc-d53c9333e348/scratchpad/import-events.js\")",
+      "Bash(curl -s -o /dev/null -D - -H \"Host: study-space-production.up.railway.app\" -H \"Accept: text/html\" \"http://localhost:3000/derbysaren\")",
+      "Bash(curl -s -o /dev/null -D - -H \"Host: belonghere.cc\" -H \"Accept: text/html\" \"http://localhost:3000/derbysaren\")",
+      "Bash(curl -s -o /dev/null -D - -H \"Host: study-space-production.up.railway.app\" -H \"Accept: text/html\" \"http://localhost:3000/api/twitch/status\")",
+      "Bash(curl -s -o /dev/null -D - -H \"Host: study-space-production.up.railway.app\" -H \"Accept: text/html\" \"http://localhost:3000/auth/google\")",
+      "Bash(curl -s -o /dev/null -D - -H \"Host: study-space-production.up.railway.app\" -H \"Accept: text/css\" \"http://localhost:3000/css/style.css\")"
     ]
   }
 }
