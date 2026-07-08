@@ -189,8 +189,8 @@ function renderSpaces(spaces) {
       ? `<img src="${esc(space.creatorAvatar)}" alt="" class="room-banner-avatar" />`
       : `<span class="room-banner-icon">${defaultIcon}</span>`;
     const enterBtn = isLive
-      ? `<a href="${esc(space.roomPath)}" class="room-enter-btn" onclick="event.stopPropagation()">Enter Space →</a>`
-      : `<a href="${esc(space.roomPath)}" class="room-enter-btn room-enter-offline" onclick="event.stopPropagation()">Enter Space (Offline)</a>`;
+      ? `<a href="${esc(space.roomPath)}" class="room-enter-btn" onclick="event.stopPropagation(); event.preventDefault(); enterSpace('${esc(space.roomPath)}')">Enter Space →</a>`
+      : `<a href="${esc(space.roomPath)}" class="room-enter-btn room-enter-offline" onclick="event.stopPropagation(); event.preventDefault(); enterSpace('${esc(space.roomPath)}')">Enter Space (Offline)</a>`;
 
     return `
       <div class="room-card ${cls}" onclick="enterSpace('${esc(space.roomPath)}')">
@@ -363,8 +363,13 @@ function _showGuestNamePrompt(targetPath) {
     }));
     _updateLandingHeader();
     modal.remove();
-    // Scroll room cards into view so user can click to enter
-    document.getElementById('spaces-grid')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (targetPath) {
+      // Enter the room the user originally clicked
+      window.location.href = targetPath;
+    } else {
+      // No target — scroll room cards into view so user can click to enter
+      document.getElementById('spaces-grid')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
   }
   submit?.addEventListener('click', doEnter);
   input?.addEventListener('keydown', (e) => { if (e.key === 'Enter') doEnter(); });

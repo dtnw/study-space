@@ -1460,13 +1460,49 @@ body:has(.modal-overlay.active) #game-container canvas { pointer-events: none; }
 #btn-a { right: 0;    bottom: 30px; }
 #btn-b { right: 60px; bottom: 0;    }
 
-/* ── Mobile layout tweaks ───────────────────────────────── */
-@media (max-width: 700px) {
-  #header { padding: 4px 8px; gap: 6px; }
-  #header-left { gap: 4px; }
-  #logo { font-size: 9px !important; }
-  .lp-back-btn { font-size: 9px !important; }
-  #player-count { display: none; }
+/* ── Mobile layout tweaks (portrait phones + short-height landscape) ── */
+@media (max-width: 700px), (max-height: 500px) {
+  /* Let the bar wrap instead of overlapping if content can't fit one row */
+  #header {
+    padding: 4px 6px;
+    gap: 6px;
+    row-gap: 4px;
+    height: auto;
+    min-height: 40px;
+    flex-wrap: wrap;
+  }
+  /* Kill the fixed min-widths so the three groups can shrink to fit */
+  #header-left, #header-right {
+    min-width: 0;
+    gap: 8px;
+  }
+  #header-left  { flex: 1 1 auto; overflow: hidden; }
+  #header-right { flex: 0 1 auto; }
+  #timer-bar    { flex: 0 0 auto; padding: 3px 8px; gap: 6px; }
+
+  /* Truncate the room name rather than letting it push everything sideways */
+  #logo {
+    font-size: 9px !important;
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .lp-back-btn            { font-size: 9px !important; padding: 4px 6px !important; }
+  .watch-live-header-btn  { font-size: 9px !important; padding: 3px 6px !important; }
+  .coin-count             { font-size: 11px !important; }
+
+  /* Hide verbose/secondary items that cause the crowding */
+  #player-count,
+  #player-name-display,
+  #timer-mode-label,
+  #status-indicator,
+  .hide-mobile { display: none !important; }
+
+  /* Status + audio button sit inline (no wasted vertical space) */
+  .status-block { flex-direction: row; align-items: center; gap: 6px; }
+  #logout-btn   { padding: 4px 8px !important; }
+
   #zoom-controls { bottom: 6px; right: 6px; }
   #zoom-controls button { width: 32px; height: 32px; font-size: 14px; }
 }

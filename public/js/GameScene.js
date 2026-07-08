@@ -276,13 +276,16 @@ class GameScene extends Phaser.Scene {
     this.eKey.on('down', () => this._handleInteract());
     this.input.keyboard.removeCapture(32);
 
-    // ── Physics world bounds ──
+    // ── Physics world bounds (also used as the locked-camera room rect) ──
     if (window.__ROOM_THEME__ === 'cafe') {
       this.physics.world.setBounds(0, 0, 960, 640);
+      this._roomRect = { x: 0, y: 0, w: 960, h: 640 };
     } else if (window.__ROOM_THEME__ === 'demo') {
       this.physics.world.setBounds(390, 278, 320, 218); // tilemap interior; bottom=496 stays above empty tile rows
+      this._roomRect = { x: 390, y: 278, w: 320, h: 218 };
     } else {
       this.physics.world.setBounds(32, 32, 1036, 732);
+      this._roomRect = { x: 32, y: 32, w: 1036, h: 732 };
     }
 
     // ── DIY placement system ────────────────────────────────
@@ -363,14 +366,19 @@ class GameScene extends Phaser.Scene {
       window._pendingSpawn = null;
     }
 
-    // ── Zoom controls ─────────────────────────────────────
-    // Mobile screens squeeze the 1100px canvas into ~380px, so the default
-    // desktop zoom looks tiny — start much closer in on touch devices.
+    // ── Locked-room camera + zoom ─────────────────────────
+    // The camera is fixed and frames the whole room; the player moves around
+    // within that fixed frame (it no longer follows the player). Zoom defaults
+    // to whatever fits the current room into the 1100×800 canvas.
     const _isMobile = window.matchMedia?.('(pointer: coarse) and (hover: none)').matches || false;
-    const DEFAULT_ZOOM = _isMobile ? 2.8 : 1.5;
     this._eLabel = _isMobile ? 'A' : 'E';
+    const cam = this.cameras.main;
+    const rr  = this._roomRect;
+    cam.setBounds(rr.x, rr.y, rr.w, rr.h);
+    const DEFAULT_ZOOM = Math.min(this.scale.width / rr.w, this.scale.height / rr.h);
     this._zoom = DEFAULT_ZOOM;
-    this.cameras.main.setZoom(this._zoom);
+    cam.setZoom(this._zoom);
+    cam.centerOn(rr.x + rr.w / 2, rr.y + rr.h / 2);
 
     // On mobile the action prompts are triggered by the A button, not E
     if (_isMobile) {
@@ -381,7 +389,8 @@ class GameScene extends Phaser.Scene {
       });
     }
 
-    const ZOOM_MIN = 0.4, ZOOM_MAX = 4.0;
+    // Don't allow zooming out past the full-room view — keeps the room framed
+    const ZOOM_MIN = DEFAULT_ZOOM, ZOOM_MAX = 4.0;
     const applyZoom = (z) => {
       this._zoom = Phaser.Math.Clamp(z, ZOOM_MIN, ZOOM_MAX);
       this.cameras.main.setZoom(this._zoom);
@@ -403,7 +412,10 @@ class GameScene extends Phaser.Scene {
     // HUD zoom buttons wired in index.html
     window._gameZoomIn  = () => applyZoom(this._zoom + 0.2);
     window._gameZoomOut = () => applyZoom(this._zoom - 0.2);
-    window._gameZoomReset = () => applyZoom(DEFAULT_ZOOM);
+    window._gameZoomReset = () => {
+      applyZoom(DEFAULT_ZOOM);
+      cam.centerOn(rr.x + rr.w / 2, rr.y + rr.h / 2);
+    };
 
     // ── Right-click / middle-mouse drag to pan ─────────────
     // Prevents context menu on canvas
@@ -465,7 +477,7 @@ class GameScene extends Phaser.Scene {
         _panActive = false;
         _panIsLeft = false;
         this.game.canvas.style.cursor = '';
-        this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
+        // Camera stays where the user left it — it no longer follows the player.
       } else if (_panIsLeft && !_panActive) {
         // Short tap — not a drag, reset tracking
         _panIsLeft = false;
@@ -493,8 +505,7 @@ class GameScene extends Phaser.Scene {
     }, { passive: true });
     this.game.canvas.addEventListener('touchend', () => { _pinchDist = 0; }, { passive: true });
 
-    // Camera follows the player
-    this.cameras.main.startFollow(this.player, true, 0.1, 0.1);
+    // Camera is locked to the room (configured in the zoom section above) — no follow.
   }
 
   update() {

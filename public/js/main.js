@@ -10,17 +10,20 @@
 (function () {
   // ── Single-tab enforcement (signed-in users only) ──────────
   const _myTabId = 'tab-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6);
-  // ── Auth guard: redirect to landing if no valid session ──────
+  // ── Auth guard: if there's no valid session, DON'T bounce to the lobby.
+  // Flag it so we can fall back to the on-page name / sign-in modal, letting
+  // the user join THIS room directly instead of being pushed away.
   (function _authGuard() {
+    let valid = false;
     try {
       const raw = localStorage.getItem('cc_session');
-      if (!raw) { window.location.replace('/'); return; }
-      const s = JSON.parse(raw);
-      if (!s || Date.now() > (s.expiresAt || 0)) {
-        localStorage.removeItem('cc_session');
-        window.location.replace('/');
+      if (raw) {
+        const s = JSON.parse(raw);
+        if (s && Date.now() <= (s.expiresAt || 0)) valid = true;
+        else localStorage.removeItem('cc_session');
       }
-    } catch(e) { window.location.replace('/'); }
+    } catch(e) { try { localStorage.removeItem('cc_session'); } catch(_) {} }
+    window._needsAuth = !valid;
   })();
 
   // ── Room detection ─────────────────────────────────────────
@@ -148,20 +151,24 @@
     });
   });
 
+  // TEMPORARY: restrict the header "Watch Live" badge to the room creator only.
+  window._updateWatchLiveBadge = function () {
+    const el = document.getElementById('watch-live-header');
+    if (!el) return;
+    const s = window._spaceStatus;
+    if (window.myRole === 'creator' && s && s.live && s.twitchLogin) {
+      el.href = 'https://twitch.tv/' + encodeURIComponent(s.twitchLogin);
+      el.classList.remove('hidden');
+    } else {
+      el.classList.add('hidden');
+    }
+  };
+
   socket.on('spaceStatus', (status) => {
     window._spaceStatus = status;
     window._updateSpacePanel?.(status);
-    // Header "Watch Live" badge — shown when streaming
-    const watchLiveHeader = document.getElementById('watch-live-header');
-    if (watchLiveHeader) {
-      if (status.live && status.twitchLogin) {
-        const url = 'https://twitch.tv/' + encodeURIComponent(status.twitchLogin);
-        watchLiveHeader.href = url;
-        watchLiveHeader.classList.remove('hidden');
-      } else {
-        watchLiveHeader.classList.add('hidden');
-      }
-    }
+    // Header "Watch Live" badge — TEMPORARILY creator-only
+    window._updateWatchLiveBadge();
   });
 
   socket.on('init', () => {});
@@ -358,6 +365,10 @@
 
     window.myRole = effectiveRole;
     window.TaskManager?.setRole(effectiveRole);
+    // Role may resolve after spaceStatus arrived — re-evaluate creator-only
+    // watch-live visibility now that we know the role.
+    window._updateWatchLiveBadge?.();
+    if (window._spaceStatus) window._updateSpacePanel?.(window._spaceStatus);
     // Show/hide privileged UI
     document.getElementById('clear-tasks-wrap')?.classList.toggle('hidden', effectiveRole === 'regular');
     document.getElementById('logo-edit-btn')?.classList.toggle('hidden', effectiveRole !== 'creator');
@@ -518,6 +529,20 @@
     const errEl = document.getElementById('name-error');
     if (errEl) errEl.textContent = '';
 
+    // Fallback path: if the user reached the room with no session (auth-guard
+    // fallback), create a guest session so it persists like the landing flow.
+    if (!window._ccSession) {
+      try {
+        const guestSess = {
+          name, twitchLogin: null, googleEmail: null, profilePic: null,
+          authType: 'guest', gender: 'auto', shirtColor: 'auto',
+          expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+        };
+        localStorage.setItem('cc_session', JSON.stringify(guestSess));
+        window._ccSession = guestSess;
+      } catch(_) {}
+    }
+
     // Persist join info so refresh auto-rejoins
     sessionStorage.setItem('studyspace_name',        name);
     sessionStorage.setItem('studyspace_gender',      'auto');
@@ -566,9 +591,20 @@
   joinBtn.addEventListener('click', () => { SoundManager.play('click'); joinGame(); });
   nameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') joinGame(); });
 
-  // ── Auto-rejoin on refresh ─────────────────────────────────
+  // ── Auto-rejoin on refresh / fallback name prompt ──────────
   const savedName  = sessionStorage.getItem('studyspace_name');
-  if (savedName && !window._suppressAutoJoin) {
+  if (window._needsAuth && !savedName) {
+    // No session and no name yet — show the sign-in / guest modal on this room
+    // page instead of bouncing to the lobby. Joining here enters THIS room.
+    window._suppressAutoJoin = true;
+    // Return to THIS room after any OAuth sign-in launched from the modal.
+    try { sessionStorage.setItem('cc_pending_room', window.location.pathname); } catch(_) {}
+    nameModal?.classList.remove('hidden');
+    nameModal?.classList.add('active');
+    document.getElementById('nm-guest-state')?.classList.remove('hidden');
+    document.getElementById('nm-twitch-state')?.classList.add('hidden');
+    setTimeout(() => nameInput?.focus(), 60);
+  } else if (savedName && !window._suppressAutoJoin) {
     nameInput.value = savedName;
     joinGame();
   } else {
@@ -1341,7 +1377,9 @@
     // watch link
     const link = document.getElementById('space-twitch-link');
     if (link) {
-      link.classList.toggle('hidden', !status.twitchLogin);
+      // TEMPORARY: only the room creator sees the watch-live link
+      const showLink = !!status.twitchLogin && window.myRole === 'creator';
+      link.classList.toggle('hidden', !showLink);
       if (status.twitchLogin) link.href = 'https://twitch.tv/' + status.twitchLogin;
     }
     // Remove any old header-live-badge elements (legacy)
