@@ -375,7 +375,9 @@ class GameScene extends Phaser.Scene {
     const cam = this.cameras.main;
     const rr  = this._roomRect;
     cam.setBounds(rr.x, rr.y, rr.w, rr.h);
-    const DEFAULT_ZOOM = Math.min(this.scale.width / rr.w, this.scale.height / rr.h);
+    // Fit the whole room into the canvas, with a little breathing room so the
+    // top/edges aren't tight against the frame.
+    const DEFAULT_ZOOM = Math.min(this.scale.width / rr.w, this.scale.height / rr.h) * 0.92;
     this._zoom = DEFAULT_ZOOM;
     cam.setZoom(this._zoom);
     cam.centerOn(rr.x + rr.w / 2, rr.y + rr.h / 2);
