@@ -597,6 +597,9 @@
     window.PomodoroManager?.restore();
     // Defer blocked list render — _blockedIds is declared later in the IIFE
     setTimeout(() => _renderBlockedList(), 0);
+
+    // First-time onboarding tour (shows once, replayable via the ? button)
+    window.Tutorial?.maybeStart();
   }
 
   joinBtn.addEventListener('click', () => { SoundManager.play('click'); joinGame(); });
