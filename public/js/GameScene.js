@@ -281,8 +281,11 @@ class GameScene extends Phaser.Scene {
       this.physics.world.setBounds(0, 0, 960, 640);
       this._roomRect = { x: 0, y: 0, w: 960, h: 640 };
     } else if (window.__ROOM_THEME__ === 'demo') {
-      this.physics.world.setBounds(390, 278, 320, 218); // tilemap interior; bottom=496 stays above empty tile rows
-      this._roomRect = { x: 390, y: 278, w: 320, h: 218 };
+      // Player is confined to the interior (can't walk through walls)…
+      this.physics.world.setBounds(390, 278, 320, 218);
+      // …but the CAMERA frames the whole room (walls, shelves, floor) so nothing
+      // is cut off. The demo tilemap sits at 358,240 and is 384×320.
+      this._roomRect = { x: 358, y: 240, w: 384, h: 320 };
     } else {
       this.physics.world.setBounds(32, 32, 1036, 732);
       this._roomRect = { x: 32, y: 32, w: 1036, h: 732 };
@@ -374,13 +377,18 @@ class GameScene extends Phaser.Scene {
     this._eLabel = _isMobile ? 'A' : 'E';
     const cam = this.cameras.main;
     const rr  = this._roomRect;
-    cam.setBounds(rr.x, rr.y, rr.w, rr.h);
-    // Fit the whole room into the canvas, with a little breathing room so the
-    // top/edges aren't tight against the frame.
-    const DEFAULT_ZOOM = Math.min(this.scale.width / rr.w, this.scale.height / rr.h) * 0.92;
+    // Fit the whole room into the canvas with a little margin so nothing is cut off.
+    const FIT = Math.min(this.scale.width / rr.w, this.scale.height / rr.h);
+    const DEFAULT_ZOOM = FIT * 0.95;
+    const ZOOM_MIN = FIT * 0.7, ZOOM_MAX = 4.0;
+    // Bounds = the widest (min-zoom) view centred on the room, so the room stays
+    // centred at every zoom level instead of being shoved into a corner.
+    const _cx = rr.x + rr.w / 2, _cy = rr.y + rr.h / 2;
+    const _bW = this.scale.width / ZOOM_MIN, _bH = this.scale.height / ZOOM_MIN;
+    cam.setBounds(_cx - _bW / 2, _cy - _bH / 2, _bW, _bH);
     this._zoom = DEFAULT_ZOOM;
     cam.setZoom(this._zoom);
-    cam.centerOn(rr.x + rr.w / 2, rr.y + rr.h / 2);
+    cam.centerOn(_cx, _cy);
 
     // On mobile the action prompts are triggered by the A button, not E
     if (_isMobile) {
@@ -391,8 +399,6 @@ class GameScene extends Phaser.Scene {
       });
     }
 
-    // Don't allow zooming out past the full-room view — keeps the room framed
-    const ZOOM_MIN = DEFAULT_ZOOM, ZOOM_MAX = 4.0;
     const applyZoom = (z) => {
       this._zoom = Phaser.Math.Clamp(z, ZOOM_MIN, ZOOM_MAX);
       this.cameras.main.setZoom(this._zoom);
